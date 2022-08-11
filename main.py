@@ -43,8 +43,7 @@ def low_price(message: types.Message) -> None:
 def get_name(message: types.Message) -> None:
     """
     This function gets city name from user
-    And waits for a message from user with number of hotels in this city.
-    It then checks message text on correctness and transmits control to function get_number.
+    It then transmits control to function get_number.
 
     :param message: Message instance with city name
     :return: None
@@ -57,9 +56,30 @@ def get_name(message: types.Message) -> None:
         bot.reply_to(message=message, text="<b>Error</b>: Incorrect value", parse_mode="html")
         print("\nError: User input incorrect value\n")
     else:
-        print(f"\nInfo: User input {message.text}\n")
-        msg = bot.reply_to(message, "Enter number of hotels:")
-        # bot.register_next_step_handler(msg, get_number)
+        print(f"\nInfo: User input {message.text}")
+        get_number(message)
+
+
+def get_number(message: types.Message) -> None:
+    """
+    This function creates a keyboard with 3 rows and 3 columns
+    With number buttons from 1 to 9 (including) and sends it to user's chat.
+
+    Clicking button calls data and sends it to callback handler function.
+
+    :param message: Last message (Message instance) in chat
+    :return: None
+    """
+
+    keyboard = types.InlineKeyboardMarkup()
+
+    for row in range(0, 3):
+        button1 = types.InlineKeyboardButton(text=f"{row * 3 + 1}", callback_data=f"{row * 3 + 1}")
+        button2 = types.InlineKeyboardButton(text=f"{row * 3 + 2}", callback_data=f"{row * 3 + 2}")
+        button3 = types.InlineKeyboardButton(text=f"{row * 3 + 3}", callback_data=f"{row * 3 + 3}")
+        keyboard.row(button1, button2, button3)
+
+    bot.reply_to(message=message, text="Enter number of hotels:", reply_markup=keyboard)
 
 
 bot.polling(none_stop=True, interval=0)
