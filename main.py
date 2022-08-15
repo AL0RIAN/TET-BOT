@@ -17,7 +17,7 @@ headers = {
 }
 
 # Response Properties
-response_properties = {"sortOrder": "", "city": "", "hotelCount": 0, "photos": False, "photoCount": 0}
+response_properties = {"sortOrder": "", "city": "", "hotelCount": 0, "photos": "No", "photoCount": 0}
 
 
 @bot.message_handler(commands=["lowprice"])
@@ -36,7 +36,7 @@ def low_price(message: types.Message) -> None:
     # Search will be done by price (from cheap to expensive)
     response_properties["sortOrder"] = "PRICE"
 
-    msg = bot.reply_to(message, "🌆 Enter city name:")
+    msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:")
     bot.register_next_step_handler(msg, get_name)
 
 
@@ -53,10 +53,14 @@ def get_name(message: types.Message) -> None:
         if not re.fullmatch(pattern=r"[ A-Za-z]+", string=f"{message.text}"):
             raise ValueError
     except ValueError:
-        bot.reply_to(message=message, text="❌ <b>Error</b>: Incorrect value", parse_mode="html")
+        bot.send_message(chat_id=message.chat.id, text="❌ <b>Error</b>: Incorrect value", parse_mode="html")
         print("\nError: User input incorrect value\n")
     else:
         print(f"\nInfo: User input {message.text}")
+        response_properties["city"] = message.text
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
+        bot.send_message(chat_id=message.chat.id, text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}",
+                         parse_mode="html")
         get_number(message)
 
 
@@ -79,7 +83,7 @@ def get_number(message: types.Message) -> None:
         button3 = types.InlineKeyboardButton(text=f"{row * 3 + 3}", callback_data=f"h{row * 3 + 3}")
         keyboard.row(button1, button2, button3)
 
-    bot.reply_to(message=message, text="🧳 Enter number of hotels:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id, text="🧳 Enter number of hotels:", reply_markup=keyboard)
 
 
 def get_answer(message: types.Message) -> None:
@@ -90,7 +94,7 @@ def get_answer(message: types.Message) -> None:
     Clicking button calls data and sends it to callback handler function.
 
 
-    :param message:
+    :param message: Last message (Message instance) in chat
     :return: None
     """
 
@@ -107,6 +111,8 @@ def callback_worker(call: types.CallbackQuery) -> None:
     """
     This function handles the callback query:
 
+    1. If query from function get_number this function
+
     # TODO documentation
 
     :param call: CallbackQuery instance
@@ -122,6 +128,7 @@ def callback_worker(call: types.CallbackQuery) -> None:
             print("\nError: User input incorrect value")
             bot.reply_to(message=call.message, text="❌ <b>Error</b>: Incorrect value", parse_mode="html")
         else:
+            response_properties["hotelCount"] = int(call.data[1:])
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                                   text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
             get_answer(call.message)
@@ -131,4 +138,5 @@ def callback_worker(call: types.CallbackQuery) -> None:
                               text=f"✅ <b>DO YOU NEED PHOTOS?</b> | Your choice: {call.data}", parse_mode="html")
 
 
-bot.polling(none_stop=True, interval=0)
+if __name__ == "__main__":
+    bot.polling(none_stop=True, interval=0)
