@@ -103,7 +103,25 @@ def get_answer(message: types.Message) -> None:
     button2 = types.InlineKeyboardButton(text="No", callback_data="No")
     keyboard.add(button1, button2)
 
-    bot.send_message(chat_id=message.chat.id, text="Do you need photos?", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id, text="📷 Do you need photos:", reply_markup=keyboard)
+
+
+def get_photo_number(message: types.Message) -> None:
+    """
+    # TODO
+
+    :param message:
+    :return:
+    """
+
+    keyboard = types.InlineKeyboardMarkup()
+    button1 = types.InlineKeyboardButton(text="1", callback_data="p1")
+    button2 = types.InlineKeyboardButton(text="2", callback_data="p2")
+    button3 = types.InlineKeyboardButton(text="3", callback_data="p3")
+
+    keyboard.add(button1, button2, button3)
+
+    bot.send_message(chat_id=message.chat.id, text="📸 How much: ", reply_markup=keyboard)
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -111,31 +129,38 @@ def callback_worker(call: types.CallbackQuery) -> None:
     """
     This function handles the callback query:
 
-    1. If query from function get_number this function
-
-    # TODO documentation
+    1. If query from function get_number (data from user starts with 'h'):
+        Step 1. callback_worker saves data to response_properties['hotelCount']
+        Step 2. callback_worker edits input prompt message from call
+        Step 3. callback_worker transmits control to function get_answer
+    2. If query from function get_answer (data is 'Yes' or 'No'):
+        Step 1. callback_worker saves data to response_properties['photos']
+        Step 2. callback_worker edits input prompt message from call
+        Step 3. if data == 'Yes' callback_worker transmits control to function get_photo_number else #TODO
+    3. If query from function get_photo_number (data from user starts with 'p'):
+        Step 1. callback_worker saves data to response_properties['photoCount']
+        Step 2. callback_worker edits input prompt message from call
 
     :param call: CallbackQuery instance
     :return: None
     """
 
     if call.data.startswith("h"):
-        try:
-            response_properties["hotelCount"] = int(call.data[1:])
-            if response_properties["hotelCount"] <= 0:
-                raise ValueError
-        except ValueError:
-            print("\nError: User input incorrect value")
-            bot.reply_to(message=call.message, text="❌ <b>Error</b>: Incorrect value", parse_mode="html")
-        else:
-            response_properties["hotelCount"] = int(call.data[1:])
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                  text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
-            get_answer(call.message)
+        response_properties["hotelCount"] = int(call.data[1:])
+        response_properties["hotelCount"] = int(call.data[1:])
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                              text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
+        get_answer(call.message)
     elif call.data == "Yes" or call.data == "No":
         response_properties["photos"] = call.data
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=f"✅ <b>DO YOU NEED PHOTOS?</b> | Your choice: {call.data}", parse_mode="html")
+        if call.data == "Yes":
+            get_photo_number(call.message)
+    elif call.data.startswith("p"):
+        response_properties["photoCount"] = int(call.data[1:])
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                              text=f"✅ <b>NUMBER OF PHOTOS</b> | Your choice: {call.data[1:]}", parse_mode="html")
 
 
 if __name__ == "__main__":
