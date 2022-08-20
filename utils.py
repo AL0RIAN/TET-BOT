@@ -7,12 +7,13 @@ from telebot import types
 from typing import List, Dict
 
 
-@bot.message_handler(commands=["lowprice"])
-def low_price(message: types.Message) -> None:
+@bot.message_handler(commands=["lowprice", "highprice"])
+def price(message: types.Message) -> None:
     """
-    This function sets functions route to find cheapest hotels
+    This function sets functions route to find hotels
 
-    Function sets sortOrder properties to 'Price' (from cheap to expensive)
+    If user entered lowprice: function sets sortOrder properties to 'PRICE' (from cheap to expensive)
+    If user entered highprice: function sets sortOrder properties to 'PRICE_HIGHEST_FIRST' (from expensive to cheap)
     And waits for a message from user with city name. Then it transmits control to
     Function get_name.
 
@@ -21,7 +22,11 @@ def low_price(message: types.Message) -> None:
     """
 
     # Search will be done by price (from cheap to expensive)
-    response_properties["sortOrder"] = "PRICE"
+    if message.text == "/lowprice":
+        response_properties["sortOrder"] = "PRICE"
+    else:
+        # Search will be done by price (from expensive to cheap)
+        response_properties["sortOrder"] = "PRICE_HIGHEST_FIRST"
 
     msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
     bot.register_next_step_handler(msg, get_name)
@@ -177,13 +182,16 @@ def hotels_parser(chat_id: str) -> None:
             caption = f"<b>{hotels[hotel]['name']}</b>: Price not available\n\n" \
                       f"Address - {hotels[hotel]['address']['streetAddress']}"
 
-        for photo in photos[hotels[hotel]["id"]]:
-            if len(temp_photos) == 0:
-                temp_photos.append(types.InputMediaPhoto(photo, caption=caption, parse_mode="html"))
-            else:
-                temp_photos.append(types.InputMediaPhoto(photo, parse_mode="html"))
+        if response_properties["photoCount"] > 0:
+            for photo in photos[hotels[hotel]["id"]]:
+                if len(temp_photos) == 0:
+                    temp_photos.append(types.InputMediaPhoto(photo, caption=caption, parse_mode="html"))
+                else:
+                    temp_photos.append(types.InputMediaPhoto(photo, parse_mode="html"))
 
-        bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=False)
+            bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
+        else:
+            bot.send_message(chat_id=chat_id, text=caption, disable_notification=True, parse_mode="html")
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -224,6 +232,7 @@ def callback_worker(call: types.CallbackQuery) -> None:
         if call.data == "Yes":
             get_photo_number(call.message)
         else:
+            response_properties["photoCount"] = 0
             hotels_parser(chat_id=call.message.chat.id)
     elif call.data.startswith("p"):
         response_properties["photoCount"] = int(call.data[1:])
