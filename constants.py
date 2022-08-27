@@ -15,4 +15,5 @@ headers = {
 }
 
 # Response Properties
-response_properties = {"sortOrder": "", "city": "", "hotelCount": 0, "photos": "No", "photoCount": 0}
+response_properties = {"sortOrder": "", "city": "", "hotelCount": 0, "photos": "No", "photoCount": 0,
+                       "priceRange": float("inf"), "distance": float("inf"), "currency": "USD"}

@@ -7,7 +7,7 @@ from telebot import types
 from typing import List, Dict
 
 
-@bot.message_handler(commands=["lowprice", "highprice"])
+@bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
 def price(message: types.Message) -> None:
     """
     This function sets functions route to find hotels
@@ -21,12 +21,19 @@ def price(message: types.Message) -> None:
     :return: None
     """
 
+    # TODO
+    response_properties["priceRange"] = float("inf")
+    response_properties["distance"] = float("inf")
+
     # Search will be done by price (from cheap to expensive)
     if message.text == "/lowprice":
         response_properties["sortOrder"] = "PRICE"
-    else:
+    elif message.text == "/highprice":
         # Search will be done by price (from expensive to cheap)
         response_properties["sortOrder"] = "PRICE_HIGHEST_FIRST"
+    else:
+        # TODO
+        response_properties["sortOrder"] = "DISTANCE_FROM_LANDMARK"
 
     msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
     bot.register_next_step_handler(msg, get_name)
@@ -54,7 +61,57 @@ def get_name(message: types.Message) -> None:
         bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
         bot.send_message(chat_id=message.chat.id, text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}",
                          parse_mode="html", disable_notification=False)
-        get_number(message)
+
+        if response_properties["sortOrder"] == "DISTANCE_FROM_LANDMARK":
+            get_price_range(message=message)
+        else:
+            get_number(message)
+
+
+def get_price_range(message: types.Message) -> None:
+    """
+    # TODO
+
+    :param message:
+    :return:
+    """
+
+    response_properties["priceRange"] = 0
+    keyboard = types.InlineKeyboardMarkup()
+
+    for symbol in ("+", "-"):
+        button1 = types.InlineKeyboardButton(text=f"{symbol}10", callback_data=f"{symbol}10")
+        button2 = types.InlineKeyboardButton(text=f"{symbol}50", callback_data=f"{symbol}50")
+        button3 = types.InlineKeyboardButton(text=f"{symbol}100", callback_data=f"{symbol}100")
+        button4 = types.InlineKeyboardButton(text=f"{symbol}250", callback_data=f"{symbol}250")
+        keyboard.row(button1, button2, button3, button4)
+
+    ok_button = types.InlineKeyboardButton(text="OK", callback_data="+OK")
+    keyboard.row(ok_button)
+
+    bot.send_message(chat_id=message.chat.id, text="💵 Enter price range:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id,
+                     text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
+
+
+def get_distance(message: types.Message) -> None:
+    """
+
+    :param message:
+    :return:
+    """
+
+    keyboard = types.InlineKeyboardMarkup()
+
+    button1 = types.InlineKeyboardButton(text="1 mill", callback_data="d1")
+    button2 = types.InlineKeyboardButton(text="3 mill", callback_data="d2")
+    button3 = types.InlineKeyboardButton(text="5 mill", callback_data="d5")
+    button4 = types.InlineKeyboardButton(text="7 mill", callback_data="d7")
+    button5 = types.InlineKeyboardButton(text="7+ mill", callback_data="dinf")
+
+    keyboard.row(button1, button2, button3, button4, button5)
+
+    bot.send_message(chat_id=message.chat.id, text="🚗 Enter distance from city center:", reply_markup=keyboard)
 
 
 def get_number(message: types.Message) -> None:
@@ -143,6 +200,8 @@ def hotels_parser(chat_id: str) -> None:
     city_response = json.loads(requests.request("GET", url_city, headers=headers, params=city_querystring).text)
     city_id = city_response["suggestions"][0]["entities"][0]["destinationId"]
 
+    print(f"\nInfo: City id is {city_id}")
+
     # Getting list of hotels by city id
     hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2022-01-08",
                           "checkOut": "2022-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
@@ -150,48 +209,100 @@ def hotels_parser(chat_id: str) -> None:
     hotels_response = json.loads(
         requests.request("GET", url_properties, headers=headers, params=hotels_querystring).text)
 
+    # TODO
     hotels: List[dict] = list()
-    for hotel in range(response_properties["hotelCount"]):
-        hotels.append(hotels_response["data"]["body"]["searchResults"]["results"][hotel])
 
-    # Getting dictionary of hotels pictures
-    photos: Dict = dict()
-    for photo in range(response_properties["hotelCount"]):
-        hotel_id = hotels[photo]["id"]
+    # правая граница цены
+    right = response_properties["priceRange"]
+
+    print(f"\nInfo: {response_properties}")
+
+    for hotel in hotels_response["data"]["body"]["searchResults"]["results"]:
+        if len(hotels) == response_properties["hotelCount"]:
+            break
+
+        # дистанция от центра
+        try:
+            result = re.match(pattern=r"\d+.\d{0,}", string=hotel["landmarks"][0]["distance"])
+            distance = float(result.group(0))
+        except KeyError:
+            distance = 0.0
+
+        # ценна данного отеля и проверка на её наличие
+        # Если у отеля известна цена ... TODO
+        try:
+            curr_hotel_price = float(hotel["ratePlan"]["price"]["exactCurrent"])
+        except KeyError:
+            curr_hotel_price = 0.0
+
+        # дистанция, заданная пользователем
+        user_distance = response_properties["distance"]
+
+        print(f'HOTEL: {hotel["name"]}')
+        print(f"DISTANCE: {distance}")
+        print(f"Current hotel price: {curr_hotel_price}\n")
+
+        if (0 < curr_hotel_price <= right) and (distance <= response_properties["distance"]):
+            hotels.append(hotel)
+            print("YES")
+        print()
+
+    # TODO ЕСЛИ hotels 0, то писать об этом юзеру
+    print("Вышел из поиска отелей")
+
+    photos: List[dict] = list()
+    for hotel in hotels:
+        # id текущего отеля
+        hotel_id = hotel["id"]
+
+        # информация для запроса
         querystring = {"id": hotel_id}
         photo_response = json.loads(requests.request("GET", url_photos, headers=headers, params=querystring).text)
 
-        for number in range(response_properties["photoCount"]):
-            if hotel_id not in photos:
-                photos[hotel_id] = list()
+        for photo in range(response_properties["photoCount"]):
+            # обработчик нужен, поскольку не у всех отелей есть фото комнат
             try:
-                photos[hotel_id].append(
-                    photo_response["roomImages"][number]["images"][number]["baseUrl"].format(size="w"))
+                photos.append(photo_response["roomImages"][photo]["images"][photo]["baseUrl"].format(size="w"))
             except IndexError:
-                photos[hotel_id].append(photo_response["hotelImages"][number]["baseUrl"].format(size="w"))
+                photos.append(photo_response["hotelImages"][photo]["baseUrl"].format(size="w"))
 
-    # Result output
-    for hotel in range(len(hotels)):
-        temp_photos = list()
-        if hotel == response_properties["hotelCount"]:
-            break
-        elif hotels[hotel].get("ratePlan"):
-            caption = f"<b>{hotels[hotel]['name']}</b>: {hotels[hotel]['ratePlan']['price']['current']}\n\n" \
-                      f"<b>Address</b>: {hotels[hotel]['address']['streetAddress']}"
+    print("Вышел из поиска фото")
+    print(f"Размер отелей: {len(hotels)}")
+    print(f"Размер фото: {len(photos)}")
+    print(photos)
+    result_out(chat_id=chat_id, hotels=hotels, photos=photos)
+
+
+def result_out(chat_id: str, hotels: list, photos: list) -> None:
+    # индекс текущего фото
+    current_photo = 0
+
+    for hotel in hotels:
+        # если у отеля известна цена
+        if hotel.get("ratePlan"):
+            caption = f"<b>{hotel['name']}</b>: {hotel['ratePlan']['price']['current']}\n\n" \
+                      f"<b>Address</b>: {hotel['address']['streetAddress']}"
+        # иначе пишем, что цена неизвестна
         else:
-            caption = f"<b>{hotels[hotel]['name']}</b>: Price not available\n\n" \
-                      f"Address - {hotels[hotel]['address']['streetAddress']}"
+            caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
+                      f"Address - {hotel['address']['streetAddress']}"
 
+        # список временных фото (для текущего отеля)
+        temp_photos: List[types.InputMediaPhoto] = list()
+
+        # если пользователю нужны фото
         if response_properties["photoCount"] > 0:
-            for photo in photos[hotels[hotel]["id"]]:
-                if len(temp_photos) == 0:
-                    temp_photos.append(types.InputMediaPhoto(photo, caption=caption, parse_mode="html"))
-                else:
-                    temp_photos.append(types.InputMediaPhoto(photo, parse_mode="html"))
+            # только первое фото должно иметь описание (caption)
+            temp_photos.append(types.InputMediaPhoto(photos[current_photo], caption=caption, parse_mode="html"))
+            for photo in range(response_properties["photoCount"] - 1):
+                current_photo += 1
+                temp_photos.append(types.InputMediaPhoto(photos[current_photo], parse_mode="html"))
 
-            bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
-        else:
-            bot.send_message(chat_id=chat_id, text=caption, disable_notification=True, parse_mode="html")
+        # отправляем текущие фотографии с описанием
+        bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
+        current_photo += 1
+    else:
+        bot.send_message(chat_id=chat_id, text="❌ Nothing found for this require")
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -239,3 +350,37 @@ def callback_worker(call: types.CallbackQuery) -> None:
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=f"✅ <b>NUMBER OF PHOTOS</b> | Your choice: {call.data[1:]}", parse_mode="html")
         hotels_parser(chat_id=call.message.chat.id)
+    elif call.data.startswith("+") or call.data.startswith("-"):
+        if re.fullmatch(pattern=r"[+-]\d+", string=f"{call.data}"):
+            response_properties["priceRange"] += int(call.data)
+            if response_properties["priceRange"] < 0:
+                response_properties["priceRange"] = 0
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
+                                  text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
+        else:
+            # TODO сделать комментарии
+            bot.edit_message_text(
+                text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceRange']} {response_properties['currency']}",
+                chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
+            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id + 1)
+            get_distance(call.message)
+
+    elif call.data.startswith("d"):
+        response_properties["distance"] = float(call.data[1:])
+
+        if call.data[1:] == "inf":
+            miles = "7+"
+        else:
+            miles = call.data[1:]
+
+        bot.edit_message_text(
+            text=f"✅ <b>DISTANCE FROM CENTER</b> | Your choice: {miles} miles",
+            chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
+        get_number(call.message)
+    else:
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+# TODO обновлять constants
+# TODO файл с командами бота и файл БД и с записью инфы пользователя
+# TODO убрать проверку на отсутствие цены
+# TODO вывод дистанции в инфе
