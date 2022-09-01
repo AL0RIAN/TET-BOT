@@ -1,10 +1,70 @@
 import re
 import logg
 import json
+import db_utils
 import requests
 from typing import List
 from constants import *
 from telebot import types
+from datetime import datetime
+
+
+@bot.message_handler(commands=["start"])
+def start(message: types.Message):
+    """
+    This function welcome message to user
+
+    :param message: Message instance with text '/start'
+    :return: None
+    """
+
+    bot.send_message(chat_id=message.chat.id, text="👋 Hello! Enter /help")
+
+
+@bot.message_handler(commands=["help"])
+def helper(message: types.Message):
+    """
+    This function sends list of commands to user
+
+    :param message: Message instance with text '/help'
+    :return: None
+    """
+
+    text = "📌 Commands:\n\n" \
+           "1. /help - list of command\n" \
+           "2. /lowprice - hotel search sorted by low price\n" \
+           "3. /highprice - hotel search sorted by high price\n" \
+           "4. /history - search history list"
+
+    bot.send_message(chat_id=message.chat.id, text=text)
+
+
+@bot.message_handler(commands=["history"])
+def history(message: types.Message) -> None:
+    """
+    This function sends history of chat to user
+
+    :param message: Message instance with text '/history'
+    :return: None
+    """
+
+    text = str()
+    text_size = 0
+    result = db_utils.from_db(user_id=message.from_user.id)
+
+    for command, date, hotels in result:
+        hotels_list = hotels.split("\n")[:-1]
+        hotels_text = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
+        text += f"\n📄 {date} - {command}: \n{hotels_text}\n"
+        text_size += len(text)
+        print(f"\nInfo: {len(text)} symbols")
+        if len(text) >= 3096:
+            bot.send_message(chat_id=message.chat.id, text=text)
+            text_size = 0
+    else:
+        bot.send_message(chat_id=message.chat.id, text="❌ History is empty")
+    if text:
+        bot.send_message(chat_id=message.chat.id, text=text)
 
 
 @bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
@@ -21,6 +81,10 @@ def price(message: types.Message) -> None:
     :param message: Message instance with text '/lowprice'
     :return: None
     """
+
+    to_data_base.append(f"{message.from_user.id}")
+    to_data_base.append(f"{message.text}")
+    to_data_base.append(f"{datetime.today().strftime('%d/%m/%Y %H:%M')}")
 
     # Each new call to this function response_properties updates its values
     response_properties["priceRange"] = float("inf")
@@ -225,11 +289,11 @@ def hotels_parser(chat_id: str) -> None:
     hotels: List[dict] = list()
     price_range = response_properties["priceRange"]
     user_distance = response_properties["distance"]
-    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2022-01-08",
-                          "checkOut": "2022-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
+    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2021-01-08",
+                          "checkOut": "2021-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
                           "locale": "en_US", "currency": "USD"}
     hotels_response = json.loads(
-        requests.request("GET", url_properties, headers=headers, params=hotels_querystring).text)
+        requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
 
     for hotel in hotels_response["data"]["body"]["searchResults"]["results"]:
         if len(hotels) == response_properties["hotelCount"]:
@@ -275,6 +339,8 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
     :return: None
     """
 
+    hotels_names = str()
+
     if hotels:
         # current photo index in photos: List(str)
         current_photo = 0
@@ -284,8 +350,14 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
                 caption = f"<b>{hotel['name']}</b>: {hotel['ratePlan']['price']['current']}\n\n" \
                           f"<b>Address</b>: {hotel['address']['streetAddress']}"
             except KeyError:
-                caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
-                          f"Address - {hotel['address']['streetAddress']}"
+                try:
+                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
+                              f"Address - {hotel['address']['streetAddress']}"
+                except KeyError:
+                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
+                              f"Address not available"
+
+            hotels_names += f"{hotel['name']}\n"
 
             # list of temporary  photos
             temp_photos: List[types.InputMediaPhoto] = list()
@@ -301,6 +373,16 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
                 current_photo += 1
             else:
                 bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True)
+
+        # Insert to database
+        to_data_base.append(hotels_names)
+
+        try:
+            db_utils.to_db(data=to_data_base)
+        except Exception:
+            bot.send_message("❌ History is empty")
+
+        to_data_base.clear()
     else:
         bot.send_message(chat_id=chat_id, text="❌ Nothing found for this require")
 
