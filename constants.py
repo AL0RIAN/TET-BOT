@@ -10,9 +10,12 @@ url_photos = "https://hotels4.p.rapidapi.com/properties/get-hotel-photos"
 
 # Header Parameters
 headers = {
-    "X-RapidAPI-Key": "46548059a6msh7a58f92b4026f21p107b6cjsn7daca088a053",
+    "X-RapidAPI-Key": "624162d6f6msh896925e99832f85p116bfbjsn1aa5f4b17c97",
     "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
 }
+
+# DB information
+to_data_base = list()
 
 # Response Properties
 response_properties = {"sortOrder": "", "city": "", "hotelCount": 0, "photos": "No", "photoCount": 0,
