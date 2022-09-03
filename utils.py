@@ -59,12 +59,12 @@ def history(message: types.Message) -> None:
         text_size += len(text)
         print(f"\nInfo: {len(text)} symbols")
         if len(text) >= 3096:
-            bot.send_message(chat_id=message.chat.id, text=text)
+            bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html")
             text_size = 0
     else:
         bot.send_message(chat_id=message.chat.id, text="❌ History is empty")
     if text:
-        bot.send_message(chat_id=message.chat.id, text=text)
+        bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html")
 
 
 @bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
@@ -346,18 +346,30 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
         current_photo = 0
 
         for hotel in hotels:
-            try:
-                caption = f"<b>{hotel['name']}</b>: {hotel['ratePlan']['price']['current']}\n\n" \
-                          f"<b>Address</b>: {hotel['address']['streetAddress']}"
-            except KeyError:
-                try:
-                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
-                              f"Address - {hotel['address']['streetAddress']}"
-                except KeyError:
-                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
-                              f"Address not available"
+            name = f"<b>{hotel['name']}</b>"
+            url = f"<a href='https://ua.hotels.com/ho{hotel['id']}/'>click it</a>"
 
-            hotels_names += f"{hotel['name']}\n"
+            try:
+                price_value = hotel['ratePlan']['price']['current']
+            except KeyError:
+                price_value = "Price not available"
+
+            try:
+                address = hotel['address']['streetAddress']
+            except KeyError:
+                address = "address not available"
+
+            try:
+                distance = f"<b>Distance from center</b>: {hotel['landmarks'][0]['distance']}"
+            except KeyError:
+                distance = "not available"
+
+            caption = f"{name}: {price_value}\n\n" \
+                      f"<b>Address</b>: {address}\n\n" \
+                      f"{distance}\n\n" \
+                      f"<b>Hotel page</b>: {url}"
+
+            hotels_names += f"{name}\n"
 
             # list of temporary  photos
             temp_photos: List[types.InputMediaPhoto] = list()
@@ -369,10 +381,12 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
                     current_photo += 1
                     temp_photos.append(types.InputMediaPhoto(photos[current_photo], parse_mode="html"))
 
-                bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
+                bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True,
+                                     disable_web_page_preview=True)
                 current_photo += 1
             else:
-                bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True)
+                bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True,
+                                 disable_web_page_preview=True)
 
         # Insert to database
         to_data_base.append(hotels_names)
