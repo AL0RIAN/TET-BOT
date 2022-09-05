@@ -5,7 +5,8 @@ import os.path
 
 
 def to_db(data: list) -> None:
-    db_path = os.path.join(os.path.abspath("history.db"))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(base_dir, "history.db")
 
     con = sqlite3.connect(db_path, check_same_thread=False)
     cur = con.cursor()
@@ -14,7 +15,8 @@ def to_db(data: list) -> None:
 
 
 def from_db(user_id: str) -> list:
-    db_path = os.path.join(os.path.abspath("history.db"))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(base_dir, "history.db")
 
     con = sqlite3.connect(db_path, check_same_thread=False)
     cur = con.cursor()

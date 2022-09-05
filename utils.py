@@ -1,12 +1,12 @@
 import re
 import logg
 import json
-import db_utils
 import requests
 from typing import List
-from constants import *
 from telebot import types
+from database import db_utils
 from datetime import datetime
+from config_data.constants import *
 
 
 @bot.message_handler(commands=["start"])
@@ -67,7 +67,6 @@ def history(message: types.Message) -> None:
         bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html")
     else:
         bot.send_message(chat_id=message.chat.id, text="❌ History is empty")
-
 
 
 @bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
