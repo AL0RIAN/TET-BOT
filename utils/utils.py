@@ -1,107 +1,38 @@
 import re
-import logg
 import json
-import db_utils
 import requests
+import database
 from typing import List
-from constants import *
 from telebot import types
-from datetime import datetime
+from debugging import logg
+from config_data.constants import *
 
 
-@bot.message_handler(commands=["start"])
-def start(message: types.Message):
+def get_days(message: types.Message) -> None:
     """
-    This function welcome message to user
+    This function gets number of days from user and transmits control to function get_name.
 
-    :param message: Message instance with text '/start'
+    :param message: Message instance with number of days
     :return: None
     """
 
-    bot.send_message(chat_id=message.chat.id, text="👋 Hello! Enter /help")
-
-
-@bot.message_handler(commands=["help"])
-def helper(message: types.Message):
-    """
-    This function sends list of commands to user
-
-    :param message: Message instance with text '/help'
-    :return: None
-    """
-
-    text = "📌 Commands:\n\n" \
-           "1. /help - list of command\n" \
-           "2. /lowprice - hotel search sorted by low price\n" \
-           "3. /highprice - hotel search sorted by high price\n" \
-           "4. /history - search history list"
-
-    bot.send_message(chat_id=message.chat.id, text=text)
-
-
-@bot.message_handler(commands=["history"])
-def history(message: types.Message) -> None:
-    """
-    This function sends history of chat to user
-
-    :param message: Message instance with text '/history'
-    :return: None
-    """
-
-    text = str()
-    text_size = 0
-    result = db_utils.from_db(user_id=message.from_user.id)
-
-    for command, date, hotels in result:
-        hotels_list = hotels.split("\n")[:-1]
-        hotels_text = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
-        text += f"\n📄 {date} - {command}: \n{hotels_text}\n"
-        text_size += len(text)
-        print(f"\nInfo: {len(text)} symbols")
-        if len(text) >= 3096:
-            bot.send_message(chat_id=message.chat.id, text=text)
-            text_size = 0
+    try:
+        if not message.text.isdigit() and int(message.text) > 0:
+            raise ValueError
+    except ValueError:
+        bot.send_message(chat_id=message.chat.id, text="❌ <b>Error</b>: Incorrect value", parse_mode="html",
+                         disable_notification=False)
+        print("\nError: User input incorrect value")
     else:
-        bot.send_message(chat_id=message.chat.id, text="❌ History is empty")
-    if text:
-        bot.send_message(chat_id=message.chat.id, text=text)
+        print(f"\nInfo: User input {message.text}")
+        response_properties["days"] = int(message.text)
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        bot.send_message(chat_id=message.chat.id, text=f"✅ <b>NUMBER OF DAYS</b> | Your choice: {message.text}",
+                         parse_mode="html", disable_notification=False)
 
-
-@bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
-def price(message: types.Message) -> None:
-    """
-    This function sets functions route to find hotels
-
-    If user entered lowprice: function sets sortOrder properties to 'PRICE' (from cheap to expensive)
-    If user entered highprice: function sets sortOrder properties to 'PRICE_HIGHEST_FIRST' (from expensive to cheap)
-    If user entered bestdeal: function sets sortOrder properties to 'DISTANCE_FROM_LANDMARK'
-
-    And waits for a message from user with city name. Then it transmits control to Function get_name.
-
-    :param message: Message instance with text '/lowprice'
-    :return: None
-    """
-
-    to_data_base.append(f"{message.from_user.id}")
-    to_data_base.append(f"{message.text}")
-    to_data_base.append(f"{datetime.today().strftime('%d/%m/%Y %H:%M')}")
-
-    # Each new call to this function response_properties updates its values
-    response_properties["priceRange"] = float("inf")
-    response_properties["distance"] = float("inf")
-
-    # Search will be done by price (from cheap to expensive)
-    if message.text == "/lowprice":
-        response_properties["sortOrder"] = "PRICE"
-    elif message.text == "/highprice":
-        # Search will be done by price (from expensive to cheap)
-        response_properties["sortOrder"] = "PRICE_HIGHEST_FIRST"
-    else:
-        # Search will be done by distance from landmark
-        response_properties["sortOrder"] = "DISTANCE_FROM_LANDMARK"
-
-    msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
-    bot.register_next_step_handler(msg, get_name)
+        msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
+        bot.register_next_step_handler(msg, get_name)
 
 
 def get_name(message: types.Message) -> None:
@@ -126,6 +57,7 @@ def get_name(message: types.Message) -> None:
         print(f"\nInfo: User input {message.text}")
         response_properties["city"] = message.text
         bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         bot.send_message(chat_id=message.chat.id, text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}",
                          parse_mode="html", disable_notification=False)
 
@@ -315,16 +247,17 @@ def hotels_parser(chat_id: str) -> None:
 
     # Getting list of photos
     photos: List[str] = list()
-    for hotel in hotels:
-        hotel_id = hotel["id"]
-        querystring = {"id": hotel_id}
-        photo_response = json.loads(requests.request("GET", url_photos, headers=headers, params=querystring).text)
+    if response_properties["photoCount"] > 0:
+        for hotel in hotels:
+            hotel_id = hotel["id"]
+            querystring = {"id": hotel_id}
+            photo_response = json.loads(requests.request("GET", url_photos, headers=headers, params=querystring).text)
 
-        for photo in range(response_properties["photoCount"]):
-            try:
-                photos.append(photo_response["roomImages"][photo]["images"][photo]["baseUrl"].format(size="w"))
-            except IndexError:
-                photos.append(photo_response["hotelImages"][photo]["baseUrl"].format(size="w"))
+            for photo in range(response_properties["photoCount"]):
+                try:
+                    photos.append(photo_response["roomImages"][photo]["images"][photo]["baseUrl"].format(size="w"))
+                except IndexError:
+                    photos.append(photo_response["hotelImages"][photo]["baseUrl"].format(size="w"))
 
     result_out(chat_id=chat_id, hotels=hotels, photos=photos)
 
@@ -346,18 +279,32 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
         current_photo = 0
 
         for hotel in hotels:
-            try:
-                caption = f"<b>{hotel['name']}</b>: {hotel['ratePlan']['price']['current']}\n\n" \
-                          f"<b>Address</b>: {hotel['address']['streetAddress']}"
-            except KeyError:
-                try:
-                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
-                              f"Address - {hotel['address']['streetAddress']}"
-                except KeyError:
-                    caption = f"<b>{hotel['name']}</b>: Price not available\n\n" \
-                              f"Address not available"
+            name = f"<b>{hotel['name']}</b>"
+            url = f"<a href='https://ua.hotels.com/ho{hotel['id']}/'>click it</a>"
 
-            hotels_names += f"{hotel['name']}\n"
+            try:
+                price_value = hotel['ratePlan']['price']['current']
+                total = round(response_properties["days"] * hotel['ratePlan']['price']['exactCurrent'], 1)
+            except KeyError:
+                price_value = "Price not available"
+                total = "-"
+
+            try:
+                address = hotel['address']['streetAddress']
+            except KeyError:
+                address = "address not available"
+
+            try:
+                distance = f"<b>Distance from center</b>: {hotel['landmarks'][0]['distance']}"
+            except KeyError:
+                distance = "not available"
+
+            caption = f"▫ {name}: {price_value} (total cost: {total} {response_properties['currency']})\n\n" \
+                      f"▫ <b>Address</b>: {address}\n\n" \
+                      f"▫ {distance}\n\n" \
+                      f"▫ <b>Hotel page</b>: {url}"
+
+            hotels_names += f"{name}\n"
 
             # list of temporary  photos
             temp_photos: List[types.InputMediaPhoto] = list()
@@ -372,15 +319,16 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
                 bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
                 current_photo += 1
             else:
-                bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True)
+                bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True,
+                                 disable_web_page_preview=True)
 
         # Insert to database
         to_data_base.append(hotels_names)
 
         try:
-            db_utils.to_db(data=to_data_base)
+            database.db_utils.to_db(data=to_data_base)
         except Exception:
-            bot.send_message("❌ History is empty")
+            pass
 
         to_data_base.clear()
     else:
