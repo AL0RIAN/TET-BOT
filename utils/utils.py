@@ -116,13 +116,13 @@ def get_distance(message: types.Message) -> None:
 
     keyboard = types.InlineKeyboardMarkup()
 
-    button1 = types.InlineKeyboardButton(text="1 miles", callback_data="d1")
-    button2 = types.InlineKeyboardButton(text="3 miles", callback_data="d2")
-    button3 = types.InlineKeyboardButton(text="5 miles", callback_data="d5")
-    button4 = types.InlineKeyboardButton(text="7 miles", callback_data="d7")
-    button5 = types.InlineKeyboardButton(text="7+ miles", callback_data="dinf")
+    for number in range(1, 8, 2):
+        button = types.InlineKeyboardButton(text=f"{number} miles", callback_data=f"d{number}")
+        keyboard.add(button)
 
-    keyboard.row(button1, button2, button3, button4, button5)
+    last_button = types.InlineKeyboardButton(text="7+ miles", callback_data="dinf")
+
+    keyboard.add(last_button)
 
     bot.send_message(chat_id=message.chat.id, text="🚗 Enter distance from city center:", reply_markup=keyboard)
 
@@ -183,11 +183,9 @@ def get_photo_number(message: types.Message) -> None:
     """
 
     keyboard = types.InlineKeyboardMarkup()
-    button1 = types.InlineKeyboardButton(text="1", callback_data="p1")
-    button2 = types.InlineKeyboardButton(text="2", callback_data="p2")
-    button3 = types.InlineKeyboardButton(text="3", callback_data="p3")
-
-    keyboard.add(button1, button2, button3)
+    for number in range(1, 4):
+        button = types.InlineKeyboardButton(text=f"{number}", callback_data=f"p{number}")
+        keyboard.add(button)
 
     bot.send_message(chat_id=message.chat.id, text="📸 How much: ", reply_markup=keyboard, disable_notification=False)
 
@@ -264,7 +262,7 @@ def hotels_parser(chat_id: str) -> None:
 
 def result_out(chat_id: str, hotels: list, photos: list) -> None:
     """
-     Function sends to chat a message with all information user requested
+    Function sends to chat a message with all information user requested
 
     :param chat_id: chat id
     :param hotels: list of hotels
@@ -376,7 +374,6 @@ def callback_worker(call: types.CallbackQuery) -> None:
     print(f"\nInfo: User input {call.data}")
 
     if call.data.startswith("h"):
-        response_properties["hotelCount"] = int(call.data[1:])
         response_properties["hotelCount"] = int(call.data[1:])
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
