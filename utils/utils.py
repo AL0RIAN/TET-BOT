@@ -182,9 +182,11 @@ def get_photo_number(message: types.Message) -> None:
     """
 
     keyboard = types.InlineKeyboardMarkup()
+
+    button: List[types.InlineKeyboardButton] = list()
     for number in range(1, 4):
-        button = types.InlineKeyboardButton(text=f"{number}", callback_data=f"p{number}")
-        keyboard.add(button)
+        button.append(types.InlineKeyboardButton(text=f"{number}", callback_data=f"p{number}"))
+    keyboard.row(button[0], button[1], button[2])
 
     bot.send_message(chat_id=message.chat.id, text="📸 How much: ", reply_markup=keyboard, disable_notification=False)
 
@@ -329,100 +331,3 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
         to_data_base.clear()
     else:
         bot.send_message(chat_id=chat_id, text="❌ Nothing found for this require")
-
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_worker(call: types.CallbackQuery) -> None:
-    """
-    This function handles the callback query:
-
-    1. If query from function get_number (data from user starts with 'h'):
-        Step 1. callback_worker saves data to response_properties['hotelCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'get_answer'
-
-    2. If query from function get_answer (data is 'Yes' or 'No'):
-        Step 1. callback_worker saves data to response_properties['photos']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. if data == 'Yes' callback_worker transmits control to function get_photo_number else is transmits
-                control to function 'hotels_parser'
-
-    3. If query from function get_photo_number (data from user starts with 'p'):
-        Step 1. callback_worker saves data to response_properties['photoCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    4. If query from function get_price_range (data from user starts with '+' or '-'):
-        If callback data include pattern [+-]\d+:
-            Step 1. It adds to response_properties["priceRange"]
-            Step 2. callback_worker edits input prompt message from call
-        If callback data include 'OK':
-            Step 1. callback_worker edits input prompt message from call
-            Step 2. callback_worker transmits control to function 'get_distance'
-
-    5. If query from function get_distance (data from user starts with 'd'):
-        Step 1. callback_worker saves data to response_properties['distance']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    :param call: CallbackQuery instance
-    :return: None
-    """
-
-    print(f"\nInfo: User input {call.data}")
-
-    if call.data.startswith("h"):
-        response_properties["hotelCount"] = int(call.data[1:])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
-        get_answer(call.message)
-
-    elif call.data == "Yes" or call.data == "No":
-        response_properties["photos"] = call.data
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>DO YOU NEED PHOTOS?</b> | Your choice: {call.data}", parse_mode="html")
-        if call.data == "Yes":
-            get_photo_number(call.message)
-        else:
-            response_properties["photoCount"] = 0
-            hotels_parser(chat_id=call.message.chat.id)
-
-    elif call.data.startswith("p"):
-        response_properties["photoCount"] = int(call.data[1:])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>NUMBER OF PHOTOS</b> | Your choice: {call.data[1:]}", parse_mode="html")
-        hotels_parser(chat_id=call.message.chat.id)
-
-    elif call.data.startswith("+") or call.data.startswith("-"):
-        if re.fullmatch(pattern=r"[+-]\d+", string=f"{call.data}"):
-            response_properties["priceRange"] += int(call.data)
-            if response_properties["priceRange"] < 0:
-                response_properties["priceRange"] = 0
-
-            try:
-                bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
-                                      text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
-            finally:
-                bot.answer_callback_query(callback_query_id=call.id)
-        else:
-            bot.edit_message_text(
-                text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceRange']} {response_properties['currency']}",
-                chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
-            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id + 1)
-            get_distance(call.message)
-
-    elif call.data.startswith("d"):
-        response_properties["distance"] = float(call.data[1:])
-
-        if call.data[1:] == "inf":
-            miles = "7+"
-        else:
-            miles = call.data[1:]
-
-        bot.edit_message_text(
-            text=f"✅ <b>DISTANCE FROM CENTER</b> | Your choice: {miles} miles",
-            chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
-        get_number(call.message)
-
-    else:
-        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
