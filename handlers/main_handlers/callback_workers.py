@@ -61,10 +61,44 @@ def photo_count_handler(call: types.CallbackQuery) -> None:
     hotels_parser(chat_id=call.message.chat.id)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("+") or call.data.startswith("-"))
-def price_range_handler(call: types.CallbackQuery) -> None:
+@bot.callback_query_handler(func=lambda call: call.data.startswith("min"))
+def min_price_handler(call: types.CallbackQuery) -> None:
     """
-    If callback data include pattern [+-]\d+:
+    If callback data include pattern r"min[+-]\d+":
+        Step 1. It adds to response_properties["priceRange"]
+        Step 2. callback_worker edits input prompt message from call
+    If callback data include 'OK':
+        Step 1. callback_worker edits input prompt message from call
+        Step 2. callback_worker transmits control to function 'get_max_price'
+
+    :param call: CallbackQuery instance
+    :return: None
+    """
+
+    print(f"\nInfo: User input {call.data}")
+    if re.fullmatch(pattern=r"min[+-]\d+", string=f"{call.data}"):
+        response_properties["priceMin"] += int(call.data[3:])
+
+        if response_properties["priceMin"] < 0:
+            response_properties["priceMin"] = 0
+
+        try:
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
+                                  text=f"Your input: {response_properties['priceMin']} {response_properties['currency']}")
+        finally:
+            bot.answer_callback_query(callback_query_id=call.id)
+    else:
+        bot.edit_message_text(
+            text=f"✅ <b>MIN PRICE</b> | Your choice: {response_properties['priceMin']} {response_properties['currency']}",
+            chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id + 1)
+        get_max_price(message=call.message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("max"))
+def min_price_handler(call: types.CallbackQuery) -> None:
+    """
+    If callback data include pattern r"max[+-]\d+":
         Step 1. It adds to response_properties["priceRange"]
         Step 2. callback_worker edits input prompt message from call
     If callback data include 'OK':
@@ -76,19 +110,20 @@ def price_range_handler(call: types.CallbackQuery) -> None:
     """
 
     print(f"\nInfo: User input {call.data}")
-    if re.fullmatch(pattern=r"[+-]\d+", string=f"{call.data}"):
-        response_properties["priceRange"] += int(call.data)
-        if response_properties["priceRange"] < 0:
-            response_properties["priceRange"] = 0
+    if re.fullmatch(pattern=r"max[+-]\d+", string=f"{call.data}"):
+        response_properties["priceMax"] += int(call.data[3:])
+
+        if response_properties["priceMax"] < 0:
+            response_properties["priceMax"] = 0
 
         try:
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
-                                  text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
+                                  text=f"Your input: {response_properties['priceMax']} {response_properties['currency']}")
         finally:
             bot.answer_callback_query(callback_query_id=call.id)
     else:
         bot.edit_message_text(
-            text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceRange']} {response_properties['currency']}",
+            text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceMax']} {response_properties['currency']}",
             chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
         bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id + 1)
         get_distance(call.message)

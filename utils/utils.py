@@ -60,12 +60,12 @@ def get_name(message: types.Message) -> None:
                               text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}", parse_mode="html")
 
         if response_properties["sortOrder"] == "DISTANCE_FROM_LANDMARK":
-            get_price_range(message=message)
+            get_min_price(message=message)
         else:
             get_number(message)
 
 
-def get_price_range(message: types.Message) -> None:
+def get_min_price(message: types.Message) -> None:
     """
     This function creates a keyboard with 2 rows and 5 columns
     With number buttons and OK-button.
@@ -87,16 +87,50 @@ def get_price_range(message: types.Message) -> None:
     for symbol in ("+", "-"):
         row: List[types.InlineKeyboardButton] = list()
         for number in (10, 50, 100, 250, 500):
-            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"{symbol}{number}")
+            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"min{symbol}{number}")
             row.append(button)
         keyboard.row(row[0], row[1], row[2], row[3], row[4])
 
-    ok_button = types.InlineKeyboardButton(text="OK", callback_data="+OK")
+    ok_button = types.InlineKeyboardButton(text="OK", callback_data="minOK")
     keyboard.row(ok_button)
 
-    bot.send_message(chat_id=message.chat.id, text="💵 Enter price range:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id, text="💵 Enter min price:", reply_markup=keyboard)
     bot.send_message(chat_id=message.chat.id,
                      text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
+
+
+def get_max_price(message: types.Message) -> None:
+    """
+    This function creates a keyboard with 2 rows and 5 columns
+    With number buttons and OK-button.
+    Then function sends it to user's chat.
+
+    Clicking button calls data and sends it to callback handler function.
+
+    :param message: Message instance with city name
+    :return: None
+    """
+
+    # start price
+    response_properties["priceMax"] = 0
+
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    # button callback_data in first row: +X, where X is a number
+    # button callback_data in second row: -X, where X is a number
+    for symbol in ("+", "-"):
+        row: List[types.InlineKeyboardButton] = list()
+        for number in (10, 50, 100, 250, 500):
+            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"max{symbol}{number}")
+            row.append(button)
+        keyboard.row(row[0], row[1], row[2], row[3], row[4])
+
+    ok_button = types.InlineKeyboardButton(text="OK", callback_data="maxOK")
+    keyboard.row(ok_button)
+
+    bot.send_message(chat_id=message.chat.id, text="💵 Enter max price:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id,
+                     text=f"Your input: {response_properties['priceMax']} {response_properties['currency']}")
 
 
 def get_distance(message: types.Message) -> None:
@@ -218,7 +252,8 @@ def hotels_parser(chat_id: str) -> None:
 
     # Getting list of hotels by city id
     hotels: List[dict] = list()
-    price_range = response_properties["priceRange"]
+    min_price = response_properties["priceMin"]
+    max_price = response_properties["priceMax"]
     hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2021-01-08",
                           "checkOut": "2021-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
                           "locale": "en_US", "currency": "USD"}
@@ -240,7 +275,7 @@ def hotels_parser(chat_id: str) -> None:
         except KeyError:
             curr_hotel_price = 0.0
 
-        if (0 < curr_hotel_price <= price_range) and (distance <= response_properties["distance"]):
+        if (min_price < curr_hotel_price <= max_price) and (distance <= response_properties["distance"]):
             hotels.append(hotel)
 
     # Getting list of photos

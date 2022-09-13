@@ -19,4 +19,4 @@ to_data_base = list()
 
 # Response Properties
 response_properties = {"sortOrder": str(), "city": str(), "days": 0, "hotelCount": 0, "photos": "No", "photoCount": 0,
-                       "priceRange": float("inf"), "distance": float("inf"), "currency": "USD"}
+                       "priceMin": 0, "priceMax": float("inf"), "distance": float("inf"), "currency": "USD"}
