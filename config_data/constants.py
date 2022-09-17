@@ -1,4 +1,6 @@
 import telebot
+import datetime
+import calendar
 
 # DiplomaTestSkillbox token
 bot = telebot.TeleBot("5374577409:AAEqaoAS1vPRc1mDhre5aM3Z1rIw1Ln_yug")
@@ -16,6 +18,14 @@ headers = {
 
 # DB information
 to_data_base = list()
+
+# Calendar Data
+calendar_data = {"day": datetime.datetime.now(),
+                 "year": datetime.datetime.now().year,
+                 "month": datetime.datetime.now().month,
+                 "from": None,
+                 "to": None
+                 }
 
 # Response Properties
 response_properties = {"sortOrder": str(), "city": str(), "days": 0, "hotelCount": 0, "photos": "No", "photoCount": 0,

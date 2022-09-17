@@ -8,30 +8,53 @@ from debugging import logg
 from config_data.constants import *
 
 
-def get_days(message: types.Message) -> None:
+def get_days(chat_id: str) -> None:
     """
     This function gets number of days from user and transmits control to function get_name.
 
-    :param message: Message instance with number of days
+    This function generates a calendar page for the current month.
+
+    :param chat_id: chat id
     :return: None
     """
 
-    try:
-        if not message.text.isdigit() and int(message.text) > 0:
-            raise ValueError
-    except ValueError:
-        bot.send_message(chat_id=message.chat.id, text="❌ <b>Error</b>: Incorrect value", parse_mode="html",
-                         disable_notification=False)
-        print("\nError: User input incorrect value")
-    else:
-        print(f"\nInfo: User input {message.text}")
-        response_properties["days"] = int(message.text)
-        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
-                              text=f"✅ <b>NUMBER OF DAYS</b> | Your choice: {message.text}", parse_mode="html")
+    now_day = datetime.datetime.now()
+    year = now_day.year
+    month = now_day.month
 
-        msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
-        bot.register_next_step_handler(msg, get_name)
+    keyboard = types.InlineKeyboardMarkup(row_width=7)
+
+    # Current year and current month
+    page = types.InlineKeyboardButton(text=f"{calendar.month_name[month]}, {str(year)}", callback_data="0")
+    keyboard.row(page)
+
+    # Days of week
+    day_names: List[types.InlineKeyboardButton] = list()
+    for number in range(7):
+        day = types.InlineKeyboardButton(text=f"{calendar.day_abbr[number]}", callback_data=f"0")
+        day_names.append(day)
+
+    keyboard.add(day_names[0], day_names[1], day_names[2], day_names[3], day_names[4], day_names[5], day_names[6])
+
+    # Days of month
+    for week in calendar.monthcalendar(year, month):
+        row: List[types.InlineKeyboardButton] = list()
+        for day in week:
+            if day == 0:
+                row.append(types.InlineKeyboardButton(text=" ", callback_data="0"))
+
+            elif f"{now_day.day}.{now_day.month}.{now_day.year}" == f"{day}.{month}.{year}":
+                row.append(types.InlineKeyboardButton(text=f"{day}", callback_data=f"c{day}.{month}.{year}"))
+
+            else:
+                row.append(types.InlineKeyboardButton(text=str(day), callback_data=f"c{day}.{month}.{year}"))
+
+        keyboard.add(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+
+    keyboard.add(types.InlineKeyboardButton(text="<", callback_data="c<"),
+                 types.InlineKeyboardButton(text=">", callback_data="c>"))
+
+    bot.send_message(chat_id=chat_id, text="🗓 Enter your booking date:", reply_markup=keyboard)
 
 
 def get_name(message: types.Message) -> None:
@@ -59,7 +82,7 @@ def get_name(message: types.Message) -> None:
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
                               text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}", parse_mode="html")
 
-        if response_properties["sortOrder"] == "DISTANCE_FROM_LANDMARK":
+        if response_properties["sortOrder"] == "BEST_SELLER":
             get_min_price(message=message)
         else:
             get_number(message)

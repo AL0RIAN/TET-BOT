@@ -2,6 +2,114 @@ from utils.utils import *
 from config_data.constants import *
 
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith("c"))
+def calendar_handler(call: types.CallbackQuery) -> None:
+    """
+    If ">" button was pressed the calendar scrolls to the next month (creating a new calendar page)
+    If "<" button was pressed the calendar scrolls to the previous month (creating a new calendar page)
+    If the date button was pressed the information enters to calendar_date
+
+
+    :param call: CallbackQuery instance
+    :return: None
+    """
+
+    print(f"\nInfo: user selected {call.data}")
+    print(f"\nInfo: {calendar_data}")
+
+    def days_between(date1, date2):
+        date1 = datetime.datetime.strptime(date1, "%d.%m.%Y")
+        date2 = datetime.datetime.strptime(date2, "%d.%m.%Y")
+        return abs((date2 - date1).days)
+
+    def calendar_maker():
+        keyboard = types.InlineKeyboardMarkup(row_width=7)
+
+        # Current year and current month
+        page = types.InlineKeyboardButton(
+            text=f"{calendar.month_name[calendar_data['month']]}, {str(calendar_data['year'])}", callback_data="0")
+        keyboard.row(page)
+
+        # Days of week
+        day_names: List[types.InlineKeyboardButton] = list()
+        for number in range(7):
+            day = types.InlineKeyboardButton(text=f"{calendar.day_abbr[number]}", callback_data=f"0")
+            day_names.append(day)
+
+        keyboard.add(day_names[0], day_names[1], day_names[2], day_names[3], day_names[4], day_names[5], day_names[6])
+
+        # Days of month
+        for week in calendar.monthcalendar(calendar_data["year"], calendar_data["month"]):
+            row: List[types.InlineKeyboardButton] = list()
+            for day in week:
+                if day == 0:
+                    row.append(types.InlineKeyboardButton(text=" ", callback_data="0"))
+
+                elif f"{now_day.day}.{now_day.month}.{now_day.year}" == f"{day}.{calendar_data['month']}.{calendar_data['year']}":
+                    row.append(types.InlineKeyboardButton(text=f"{day}",
+                                                          callback_data=f"c{day}.{calendar_data['month']}.{calendar_data['year']}"))
+
+                else:
+                    row.append(types.InlineKeyboardButton(text=str(day),
+                                                          callback_data=f"c{day}.{calendar_data['month']}.{calendar_data['year']}"))
+
+            keyboard.add(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+
+        keyboard.add(types.InlineKeyboardButton(text="<", callback_data="c<"),
+                     types.InlineKeyboardButton(text=">", callback_data="c>"))
+
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                      inline_message_id=call.inline_message_id, reply_markup=keyboard)
+
+        bot.answer_callback_query(callback_query_id=call.id)
+
+    now_day = datetime.datetime.now()
+    if call.data[1:] == ">":
+        # If current month is the last one the counter is reset
+        if calendar_data["month"] == 12:
+            calendar_data["month"] = 1
+            calendar_data["year"] = calendar_data["year"] + 1
+        else:
+            calendar_data["month"] = calendar_data["month"] + 1
+        calendar_maker()
+
+    elif call.data[1:] == "<":
+        # If the current month is the first one the counter is reset.
+        if calendar_data["month"] == 1:
+            calendar_data["month"] = 12
+            calendar_data["year"] = calendar_data["year"] - 1
+        else:
+            calendar_data["month"] = calendar_data["month"] - 1
+        calendar_maker()
+
+    elif re.fullmatch(pattern=r"c\d+.\d+.\d+", string=f"{call.data}"):
+
+        if not calendar_data["from"]:
+            calendar_data["from"] = call.data[1:]
+            print(f"\nInfo: {calendar_data['from']}")
+
+            bot.edit_message_text(text=f"🕓 <b>BOOKING</b> | Your choice: from <b>{calendar_data['from']}</b> to -",
+                                  chat_id=call.message.chat.id, message_id=call.message.message_id - 1,
+                                  parse_mode="html")
+            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+            get_days(chat_id=call.message.chat.id)
+        else:
+            calendar_data["to"] = call.data[1:]
+            print(f"\nInfo: {calendar_data['to']}")
+
+            bot.edit_message_text(
+                text=f"✅ <b>BOOKING</b> | Your choice: from <b>{calendar_data['from']}</b> to <b>{calendar_data['to']}</b>",
+                chat_id=call.message.chat.id, message_id=call.message.message_id - 2,
+                parse_mode="html")
+            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+            response_properties["days"] = days_between(date1=calendar_data["from"], date2=calendar_data["to"])
+
+            msg = bot.send_message(chat_id=call.message.chat.id, text="🌆 Enter city name:", disable_notification=False)
+            bot.register_next_step_handler(msg, get_name)
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("h"))
 def hotel_number_handler(call: types.CallbackQuery) -> None:
     """
@@ -17,6 +125,7 @@ def hotel_number_handler(call: types.CallbackQuery) -> None:
     response_properties["hotelCount"] = int(call.data[1:])
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                           text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
+
     get_answer(call.message)
 
 
