@@ -1,5 +1,55 @@
+import calendar
 from utils.utils import *
 from config_data.constants import *
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("H"))
+def history_handler(call: types.CallbackQuery) -> None:
+    """
+    If ">" button was pressed the page changes to the next
+    If "<" button was pressed the page changes to the previous
+
+    :param call: CallbackQuery instance
+    :return: None
+    """
+    user_id = history_data["currentId"]
+    result = database.db_utils.from_db(user_id=user_id)
+    hotels_count = len(result) - 1
+
+    def create_page():
+        current_page = history_data["currentPage"]
+
+        keyboard = types.InlineKeyboardMarkup()
+        button1 = types.InlineKeyboardButton(text="<", callback_data="H<")
+        button2 = types.InlineKeyboardButton(text=">", callback_data="H>")
+        button3 = types.InlineKeyboardButton(text="OK", callback_data="Hok")
+        keyboard.add(button1, button3, button2)
+
+        head = f"📄 Record #{current_page} - {result[current_page][0]}: {result[current_page][1]}:"
+        hotels_list = result[current_page][2].split("\n")[:-1]
+        hotels = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
+        text = f"{head} \n{hotels}\n"
+
+        bot.edit_message_text(text=text, message_id=call.message.message_id, chat_id=call.message.chat.id,
+                              parse_mode="html", reply_markup=keyboard)
+
+        bot.answer_callback_query(callback_query_id=call.id)
+
+    if call.data[1:] == ">":
+        if history_data["currentPage"] + 1 > hotels_count:
+            history_data["currentPage"] = 0
+        else:
+            history_data["currentPage"] += 1
+        create_page()
+    elif call.data[1:] == "<":
+        if history_data["currentPage"] - 1 < 0:
+            history_data["currentPage"] = hotels_count
+        else:
+            history_data["currentPage"] -= 1
+        create_page()
+    else:
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id - 1)
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("c"))
@@ -186,16 +236,15 @@ def min_price_handler(call: types.CallbackQuery) -> None:
 
     print(f"\nInfo: User input {call.data}")
     if re.fullmatch(pattern=r"min[+-]\d+", string=f"{call.data}"):
-        response_properties["priceMin"] += int(call.data[3:])
 
-        if response_properties["priceMin"] < 0:
+        if response_properties["priceMin"] + int(call.data[3:]) <= 0:
             response_properties["priceMin"] = 0
-
-        try:
+        else:
+            response_properties["priceMin"] += int(call.data[3:])
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
                                   text=f"Your input: {response_properties['priceMin']} {response_properties['currency']}")
-        finally:
-            bot.answer_callback_query(callback_query_id=call.id)
+
+        bot.answer_callback_query(callback_query_id=call.id)
     else:
         bot.edit_message_text(
             text=f"✅ <b>MIN PRICE</b> | Your choice: {response_properties['priceMin']} {response_properties['currency']}",
@@ -220,16 +269,16 @@ def min_price_handler(call: types.CallbackQuery) -> None:
 
     print(f"\nInfo: User input {call.data}")
     if re.fullmatch(pattern=r"max[+-]\d+", string=f"{call.data}"):
-        response_properties["priceMax"] += int(call.data[3:])
 
-        if response_properties["priceMax"] < 0:
+        if response_properties["priceMax"] + int(call.data[3:]) <= 0:
             response_properties["priceMax"] = 0
 
-        try:
+        else:
+            response_properties["priceMax"] += int(call.data[3:])
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
                                   text=f"Your input: {response_properties['priceMax']} {response_properties['currency']}")
-        finally:
-            bot.answer_callback_query(callback_query_id=call.id)
+
+        bot.answer_callback_query(callback_query_id=call.id)
     else:
         bot.edit_message_text(
             text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceMax']} {response_properties['currency']}",

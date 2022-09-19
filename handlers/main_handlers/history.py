@@ -1,6 +1,6 @@
 import database
 from telebot import types
-from config_data.constants import bot
+from config_data.constants import bot, history_data
 
 
 @bot.message_handler(commands=["history"])
@@ -12,21 +12,24 @@ def history(message: types.Message) -> None:
     :return: None
     """
 
-    text = str()
-    text_size = 0
+    print(f"\nInfo: user id is {message.from_user.id}")
+    history_data["currentId"] = message.from_user.id
+
     result = database.db_utils.from_db(user_id=message.from_user.id)
-
-    for command, date, hotels in result:
-        hotels_list = hotels.split("\n")[:-1]
-        hotels_text = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
-        text += f"\n📄 {date} - {command}: \n{hotels_text}\n"
-        text_size += len(text)
-        print(f"\nInfo: {len(text)} symbols")
-        if len(text) >= 3096:
-            bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html")
-            text_size = 0
-
-    if text:
-        bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html")
-    else:
+    if len(result) == 0:
         bot.send_message(chat_id=message.chat.id, text="❌ History is empty")
+    else:
+        current_page = 0
+
+        keyboard = types.InlineKeyboardMarkup()
+        button1 = types.InlineKeyboardButton(text="<", callback_data="H<")
+        button2 = types.InlineKeyboardButton(text=">", callback_data="H>")
+        button3 = types.InlineKeyboardButton(text="OK", callback_data="Hok")
+        keyboard.add(button1, button3, button2)
+
+        head = f"📄 Record #{current_page} - {result[current_page][0]}: {result[current_page][1]}:"
+        hotels_list = result[current_page][2].split("\n")[:-1]
+        hotels = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
+        text = f"{head} \n{hotels}\n"
+
+        bot.send_message(chat_id=message.chat.id, text=text, parse_mode="html", reply_markup=keyboard)
