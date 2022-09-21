@@ -2,6 +2,7 @@ import re
 import json
 import requests
 import database
+import calendar
 from typing import List
 from telebot import types
 from debugging import logg
@@ -44,10 +45,10 @@ def get_days(chat_id: str) -> None:
                 row.append(types.InlineKeyboardButton(text=" ", callback_data="0"))
 
             elif f"{now_day.day}.{now_day.month}.{now_day.year}" == f"{day}.{month}.{year}":
-                row.append(types.InlineKeyboardButton(text=f"{day}", callback_data=f"c{day}.{month}.{year}"))
+                row.append(types.InlineKeyboardButton(text=f"{day}", callback_data=f"c{year}-{month}-{day}"))
 
             else:
-                row.append(types.InlineKeyboardButton(text=str(day), callback_data=f"c{day}.{month}.{year}"))
+                row.append(types.InlineKeyboardButton(text=str(day), callback_data=f"c{year}-{month}-{day}"))
 
         keyboard.add(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
 
@@ -263,6 +264,7 @@ def hotels_parser(chat_id: str) -> None:
     """
 
     print(f"\nInfo: {response_properties}")
+    print(f"\nInfo: {calendar_data}")
 
     # Getting city id
     bot.send_message(chat_id=chat_id, text="✅ <b>REQUEST HAD ACCEPTED</b> | Please Wait", parse_mode="html",
@@ -277,8 +279,10 @@ def hotels_parser(chat_id: str) -> None:
     hotels: List[dict] = list()
     min_price = response_properties["priceMin"]
     max_price = response_properties["priceMax"]
-    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2021-01-08",
-                          "checkOut": "2021-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
+    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25",
+                          "checkIn": f"{calendar_data['from']}",
+                          "checkOut": f"{calendar_data['to']}", "adults1": "1",
+                          "sortOrder": f"{response_properties['sortOrder']}",
                           "locale": "en_US", "currency": "USD"}
     hotels_response = json.loads(
         requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
@@ -380,6 +384,8 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
 
         # Insert to database
         to_data_base.append(hotels_names)
+
+        print(f"Info: to database: {to_data_base}")
 
         try:
             database.db_utils.to_db(data=to_data_base)

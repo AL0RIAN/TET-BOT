@@ -1,8 +1,8 @@
 import sqlite3
 import os.path
 
-# rows: user, command, date, hotels
 
+# rows: user, command, date, hotels
 
 def to_db(data: list) -> None:
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,6 +24,6 @@ def from_db(user_id: str) -> list:
 
     for row in cur.execute(f"SELECT command, date, hotels FROM history WHERE user = '{user_id}'"):
         result.append(row)
-        print(f"\nInfo: {row} added")
+        # print(f"\nInfo: {row} added")
 
     return result

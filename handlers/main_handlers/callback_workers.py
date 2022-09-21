@@ -1,4 +1,3 @@
-import calendar
 from utils.utils import *
 from config_data.constants import *
 
@@ -25,7 +24,7 @@ def history_handler(call: types.CallbackQuery) -> None:
         button3 = types.InlineKeyboardButton(text="OK", callback_data="Hok")
         keyboard.add(button1, button3, button2)
 
-        head = f"📄 Record #{current_page} - {result[current_page][0]}: {result[current_page][1]}:"
+        head = f"📄 Record #{current_page + 1} - {result[current_page][0]}: {result[current_page][1]}:"
         hotels_list = result[current_page][2].split("\n")[:-1]
         hotels = "".join(list(map(lambda x: f"\n{hotels_list.index(x) + 1}. {x}", hotels_list)))
         text = f"{head} \n{hotels}\n"
@@ -35,21 +34,23 @@ def history_handler(call: types.CallbackQuery) -> None:
 
         bot.answer_callback_query(callback_query_id=call.id)
 
-    if call.data[1:] == ">":
+    if call.data[1:] == ">" and hotels_count != 0:
         if history_data["currentPage"] + 1 > hotels_count:
             history_data["currentPage"] = 0
         else:
             history_data["currentPage"] += 1
         create_page()
-    elif call.data[1:] == "<":
+    elif call.data[1:] == "<" and hotels_count != 0:
         if history_data["currentPage"] - 1 < 0:
             history_data["currentPage"] = hotels_count
         else:
             history_data["currentPage"] -= 1
         create_page()
-    else:
+    elif call.data[1:] == "ok":
         bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id - 1)
         bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    else:
+        bot.answer_callback_query(callback_query_id=call.id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("c"))
@@ -68,8 +69,8 @@ def calendar_handler(call: types.CallbackQuery) -> None:
     print(f"\nInfo: {calendar_data}")
 
     def days_between(date1, date2):
-        date1 = datetime.datetime.strptime(date1, "%d.%m.%Y")
-        date2 = datetime.datetime.strptime(date2, "%d.%m.%Y")
+        date1 = datetime.datetime.strptime(date1, "%Y-%m-%d")
+        date2 = datetime.datetime.strptime(date2, "%Y-%m-%d")
         return abs((date2 - date1).days)
 
     def calendar_maker():
@@ -97,11 +98,10 @@ def calendar_handler(call: types.CallbackQuery) -> None:
 
                 elif f"{now_day.day}.{now_day.month}.{now_day.year}" == f"{day}.{calendar_data['month']}.{calendar_data['year']}":
                     row.append(types.InlineKeyboardButton(text=f"{day}",
-                                                          callback_data=f"c{day}.{calendar_data['month']}.{calendar_data['year']}"))
-
+                                                          callback_data=f"c{calendar_data['year']}-{calendar_data['month']}-{day}"))
                 else:
                     row.append(types.InlineKeyboardButton(text=str(day),
-                                                          callback_data=f"c{day}.{calendar_data['month']}.{calendar_data['year']}"))
+                                                          callback_data=f"c{calendar_data['year']}-{calendar_data['month']}-{day}"))
 
             keyboard.add(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
 
@@ -135,7 +135,8 @@ def calendar_handler(call: types.CallbackQuery) -> None:
     elif re.fullmatch(pattern=r"c\d+.\d+.\d+", string=f"{call.data}"):
 
         if not calendar_data["from"]:
-            calendar_data["from"] = call.data[1:]
+            data = call.data[1:].split("-")
+            calendar_data["from"] = "{:4d}-{:02d}-{:02d}".format(int(data[0]), int(data[1]), int(data[2]))
             print(f"\nInfo: {calendar_data['from']}")
 
             bot.edit_message_text(text=f"🕓 <b>BOOKING</b> | Your choice: from <b>{calendar_data['from']}</b> to -",
@@ -145,7 +146,8 @@ def calendar_handler(call: types.CallbackQuery) -> None:
 
             get_days(chat_id=call.message.chat.id)
         else:
-            calendar_data["to"] = call.data[1:]
+            data = call.data[1:].split("-")
+            calendar_data["to"] = "{:4d}-{:02d}-{:02d}".format(int(data[0]), int(data[1]), int(data[2]))
             print(f"\nInfo: {calendar_data['to']}")
 
             bot.edit_message_text(
@@ -254,7 +256,7 @@ def min_price_handler(call: types.CallbackQuery) -> None:
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("max"))
-def min_price_handler(call: types.CallbackQuery) -> None:
+def max_price_handler(call: types.CallbackQuery) -> None:
     """
     If callback data include pattern r"max[+-]\d+":
         Step 1. It adds to response_properties["priceRange"]
