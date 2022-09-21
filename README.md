@@ -40,9 +40,93 @@
 
     :param message: Message instance with text '/lowprice'
     :return: None
-
 </ol>
 
+
+#   Callback Workers (for Utils)
+
+
+<ol>
+
+##  <li>*history_handler*</li>
+
+    If ">" button was pressed the page changes to the next
+    If "<" button was pressed the page changes to the previous
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*calendar_handler*</li>
+    
+    If ">" button was pressed the calendar scrolls to the next month (creating a new calendar page)
+    If "<" button was pressed the calendar scrolls to the previous month (creating a new calendar page)
+    If the date button was pressed the information enters to calendar_date
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*hotel_number_handler*</li>
+
+    Step 1. callback_worker saves data to response_properties['hotelCount']
+    Step 2. callback_worker edits input prompt message from call
+    Step 3. callback_worker transmits control to function 'get_answer'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*get_answer_handler*</li>
+
+    Step 1. callback_worker saves data to response_properties['photos']
+    Step 2. callback_worker edits input prompt message from call
+    Step 3. if data == 'Yes' callback_worker transmits control to function get_photo_number else is transmits
+    control to function 'hotels_parser'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*photo_count_handler*</li>
+
+    Step 1. callback_worker saves data to response_properties['photoCount']
+    Step 2. callback_worker edits input prompt message from call
+    Step 3. callback_worker transmits control to function 'hotels_parser'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*min_price_handler*</li>
+
+    If callback data include pattern r"min[+-]\d+":
+        Step 1. It adds to response_properties["priceRange"]
+        Step 2. callback_worker edits input prompt message from call
+    If callback data include 'OK':
+        Step 1. callback_worker edits input prompt message from call
+        Step 2. callback_worker transmits control to function 'get_max_price'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*max_price_handler*</li>
+
+    If callback data include pattern r"max[+-]\d+":
+        Step 1. It adds to response_properties["priceRange"]
+        Step 2. callback_worker edits input prompt message from call
+    If callback data include 'OK':
+        Step 1. callback_worker edits input prompt message from call
+        Step 2. callback_worker transmits control to function 'get_distance'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+##  <li>*get_distance_handler*</li>
+
+    Step 1. callback_worker saves data to response_properties['distance']
+    Step 2. callback_worker edits input prompt message from call
+    Step 3. callback_worker transmits control to function 'hotels_parser'
+
+    :param call: CallbackQuery instance
+    :return: None
+
+</ol>
 
 #   Utils
 
@@ -137,42 +221,6 @@
     :param chat_id: chat id
     :param hotels: list of hotels
     :param photos: list of photos
-    :return: None
-
-##   <li>*callback_worker*</li>
-
-    This function handles the callback query:
-
-    1. If query from function get_number (data from user starts with 'h'):
-        Step 1. callback_worker saves data to response_properties['hotelCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'get_answer'
-
-    2. If query from function get_answer (data is 'Yes' or 'No'):
-        Step 1. callback_worker saves data to response_properties['photos']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. if data == 'Yes' callback_worker transmits control to function get_photo_number else is transmits
-                control to function 'hotels_parser'
-
-    3. If query from function get_photo_number (data from user starts with 'p'):
-        Step 1. callback_worker saves data to response_properties['photoCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    4. If query from function get_price_range (data from user starts with '+' or '-'):
-        If callback data include pattern [+-]\d+:
-            Step 1. It adds to response_properties["priceRange"]
-            Step 2. callback_worker edits input prompt message from call
-        If callback data include 'OK':
-            Step 1. callback_worker edits input prompt message from call
-            Step 2. callback_worker transmits control to function 'get_distance'
-
-    5. If query from function get_distance (data from user starts with 'd'):
-        Step 1. callback_worker saves data to response_properties['distance']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    :param call: CallbackQuery instance
     :return: None
 
 </ol>

@@ -31,5 +31,14 @@ calendar_data = {"day": datetime.datetime.now(),
                  }
 
 # Response Properties
-response_properties = {"sortOrder": str(), "city": str(), "days": 0, "hotelCount": 0, "photos": "No", "photoCount": 0,
-                       "priceMin": 0, "priceMax": float("inf"), "distance": float("inf"), "currency": "USD"}
+response_properties = {"sortOrder": str(),
+                       "city": str(),
+                       "days": 0,
+                       "hotelCount": 0,
+                       "photos": "No",
+                       "photoCount": 0,
+                       "priceMin": 0,
+                       "priceMax": float("inf"),
+                       "distance": float("inf"),
+                       "currency": "USD"
+                       }
