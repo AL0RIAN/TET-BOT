@@ -2,36 +2,60 @@ import re
 import json
 import requests
 import database
+import calendar
 from typing import List
 from telebot import types
 from debugging import logg
 from config_data.constants import *
 
 
-def get_days(message: types.Message) -> None:
+def get_days(chat_id: str) -> None:
     """
     This function gets number of days from user and transmits control to function get_name.
 
-    :param message: Message instance with number of days
+    This function generates a calendar page for the current month.
+
+    :param chat_id: chat id
     :return: None
     """
 
-    try:
-        if not message.text.isdigit() and int(message.text) > 0:
-            raise ValueError
-    except ValueError:
-        bot.send_message(chat_id=message.chat.id, text="❌ <b>Error</b>: Incorrect value", parse_mode="html",
-                         disable_notification=False)
-        print("\nError: User input incorrect value")
-    else:
-        print(f"\nInfo: User input {message.text}")
-        response_properties["days"] = int(message.text)
-        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
-                              text=f"✅ <b>NUMBER OF DAYS</b> | Your choice: {message.text}", parse_mode="html")
+    now_day = datetime.datetime.now()
+    year = now_day.year
+    month = now_day.month
 
-        msg = bot.send_message(chat_id=message.chat.id, text="🌆 Enter city name:", disable_notification=False)
-        bot.register_next_step_handler(msg, get_name)
+    keyboard = types.InlineKeyboardMarkup(row_width=7)
+
+    # Current year and current month
+    page = types.InlineKeyboardButton(text=f"{calendar.month_name[month]}, {str(year)}", callback_data="0")
+    keyboard.row(page)
+
+    # Days of week
+    day_names: List[types.InlineKeyboardButton] = list()
+    for number in range(7):
+        day = types.InlineKeyboardButton(text=f"{calendar.day_abbr[number]}", callback_data=f"0")
+        day_names.append(day)
+
+    keyboard.add(day_names[0], day_names[1], day_names[2], day_names[3], day_names[4], day_names[5], day_names[6])
+
+    # Days of month
+    for week in calendar.monthcalendar(year, month):
+        row: List[types.InlineKeyboardButton] = list()
+        for day in week:
+            if day == 0:
+                row.append(types.InlineKeyboardButton(text=" ", callback_data="0"))
+
+            elif f"{now_day.day}.{now_day.month}.{now_day.year}" == f"{day}.{month}.{year}":
+                row.append(types.InlineKeyboardButton(text=f"{day}", callback_data=f"c{year}-{month}-{day}"))
+
+            else:
+                row.append(types.InlineKeyboardButton(text=str(day), callback_data=f"c{year}-{month}-{day}"))
+
+        keyboard.add(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+
+    keyboard.add(types.InlineKeyboardButton(text="<", callback_data="c<"),
+                 types.InlineKeyboardButton(text=">", callback_data="c>"))
+
+    bot.send_message(chat_id=chat_id, text="🗓 Enter your booking date:", reply_markup=keyboard)
 
 
 def get_name(message: types.Message) -> None:
@@ -59,13 +83,13 @@ def get_name(message: types.Message) -> None:
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
                               text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}", parse_mode="html")
 
-        if response_properties["sortOrder"] == "DISTANCE_FROM_LANDMARK":
-            get_price_range(message=message)
+        if response_properties["sortOrder"] == "BEST_SELLER":
+            get_min_price(message=message)
         else:
             get_number(message)
 
 
-def get_price_range(message: types.Message) -> None:
+def get_min_price(message: types.Message) -> None:
     """
     This function creates a keyboard with 2 rows and 5 columns
     With number buttons and OK-button.
@@ -87,16 +111,50 @@ def get_price_range(message: types.Message) -> None:
     for symbol in ("+", "-"):
         row: List[types.InlineKeyboardButton] = list()
         for number in (10, 50, 100, 250, 500):
-            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"{symbol}{number}")
+            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"min{symbol}{number}")
             row.append(button)
         keyboard.row(row[0], row[1], row[2], row[3], row[4])
 
-    ok_button = types.InlineKeyboardButton(text="OK", callback_data="+OK")
+    ok_button = types.InlineKeyboardButton(text="OK", callback_data="minOK")
     keyboard.row(ok_button)
 
-    bot.send_message(chat_id=message.chat.id, text="💵 Enter price range:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id, text="💵 Enter min price:", reply_markup=keyboard)
     bot.send_message(chat_id=message.chat.id,
                      text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
+
+
+def get_max_price(message: types.Message) -> None:
+    """
+    This function creates a keyboard with 2 rows and 5 columns
+    With number buttons and OK-button.
+    Then function sends it to user's chat.
+
+    Clicking button calls data and sends it to callback handler function.
+
+    :param message: Message instance with city name
+    :return: None
+    """
+
+    # start price
+    response_properties["priceMax"] = 0
+
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    # button callback_data in first row: +X, where X is a number
+    # button callback_data in second row: -X, where X is a number
+    for symbol in ("+", "-"):
+        row: List[types.InlineKeyboardButton] = list()
+        for number in (10, 50, 100, 250, 500):
+            button = types.InlineKeyboardButton(text=f"{symbol}{number}", callback_data=f"max{symbol}{number}")
+            row.append(button)
+        keyboard.row(row[0], row[1], row[2], row[3], row[4])
+
+    ok_button = types.InlineKeyboardButton(text="OK", callback_data="maxOK")
+    keyboard.row(ok_button)
+
+    bot.send_message(chat_id=message.chat.id, text="💵 Enter max price:", reply_markup=keyboard)
+    bot.send_message(chat_id=message.chat.id,
+                     text=f"Your input: {response_properties['priceMax']} {response_properties['currency']}")
 
 
 def get_distance(message: types.Message) -> None:
@@ -182,9 +240,11 @@ def get_photo_number(message: types.Message) -> None:
     """
 
     keyboard = types.InlineKeyboardMarkup()
+
+    button: List[types.InlineKeyboardButton] = list()
     for number in range(1, 4):
-        button = types.InlineKeyboardButton(text=f"{number}", callback_data=f"p{number}")
-        keyboard.add(button)
+        button.append(types.InlineKeyboardButton(text=f"{number}", callback_data=f"p{number}"))
+    keyboard.row(button[0], button[1], button[2])
 
     bot.send_message(chat_id=message.chat.id, text="📸 How much: ", reply_markup=keyboard, disable_notification=False)
 
@@ -204,6 +264,7 @@ def hotels_parser(chat_id: str) -> None:
     """
 
     print(f"\nInfo: {response_properties}")
+    print(f"\nInfo: {calendar_data}")
 
     # Getting city id
     bot.send_message(chat_id=chat_id, text="✅ <b>REQUEST HAD ACCEPTED</b> | Please Wait", parse_mode="html",
@@ -216,9 +277,12 @@ def hotels_parser(chat_id: str) -> None:
 
     # Getting list of hotels by city id
     hotels: List[dict] = list()
-    price_range = response_properties["priceRange"]
-    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25", "checkIn": "2021-01-08",
-                          "checkOut": "2021-01-15", "adults1": "1", "sortOrder": f"{response_properties['sortOrder']}",
+    min_price = response_properties["priceMin"]
+    max_price = response_properties["priceMax"]
+    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25",
+                          "checkIn": f"{calendar_data['from']}",
+                          "checkOut": f"{calendar_data['to']}", "adults1": "1",
+                          "sortOrder": f"{response_properties['sortOrder']}",
                           "locale": "en_US", "currency": "USD"}
     hotels_response = json.loads(
         requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
@@ -238,7 +302,7 @@ def hotels_parser(chat_id: str) -> None:
         except KeyError:
             curr_hotel_price = 0.0
 
-        if (0 < curr_hotel_price <= price_range) and (distance <= response_properties["distance"]):
+        if (min_price < curr_hotel_price <= max_price) and (distance <= response_properties["distance"]):
             hotels.append(hotel)
 
     # Getting list of photos
@@ -321,6 +385,8 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
         # Insert to database
         to_data_base.append(hotels_names)
 
+        print(f"Info: to database: {to_data_base}")
+
         try:
             database.db_utils.to_db(data=to_data_base)
         except Exception:
@@ -329,100 +395,3 @@ def result_out(chat_id: str, hotels: list, photos: list) -> None:
         to_data_base.clear()
     else:
         bot.send_message(chat_id=chat_id, text="❌ Nothing found for this require")
-
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_worker(call: types.CallbackQuery) -> None:
-    """
-    This function handles the callback query:
-
-    1. If query from function get_number (data from user starts with 'h'):
-        Step 1. callback_worker saves data to response_properties['hotelCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'get_answer'
-
-    2. If query from function get_answer (data is 'Yes' or 'No'):
-        Step 1. callback_worker saves data to response_properties['photos']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. if data == 'Yes' callback_worker transmits control to function get_photo_number else is transmits
-                control to function 'hotels_parser'
-
-    3. If query from function get_photo_number (data from user starts with 'p'):
-        Step 1. callback_worker saves data to response_properties['photoCount']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    4. If query from function get_price_range (data from user starts with '+' or '-'):
-        If callback data include pattern [+-]\d+:
-            Step 1. It adds to response_properties["priceRange"]
-            Step 2. callback_worker edits input prompt message from call
-        If callback data include 'OK':
-            Step 1. callback_worker edits input prompt message from call
-            Step 2. callback_worker transmits control to function 'get_distance'
-
-    5. If query from function get_distance (data from user starts with 'd'):
-        Step 1. callback_worker saves data to response_properties['distance']
-        Step 2. callback_worker edits input prompt message from call
-        Step 3. callback_worker transmits control to function 'hotels_parser'
-
-    :param call: CallbackQuery instance
-    :return: None
-    """
-
-    print(f"\nInfo: User input {call.data}")
-
-    if call.data.startswith("h"):
-        response_properties["hotelCount"] = int(call.data[1:])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>NUMBER OF HOTELS</b> | Your choice: {call.data[1:]}", parse_mode="html")
-        get_answer(call.message)
-
-    elif call.data == "Yes" or call.data == "No":
-        response_properties["photos"] = call.data
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>DO YOU NEED PHOTOS?</b> | Your choice: {call.data}", parse_mode="html")
-        if call.data == "Yes":
-            get_photo_number(call.message)
-        else:
-            response_properties["photoCount"] = 0
-            hotels_parser(chat_id=call.message.chat.id)
-
-    elif call.data.startswith("p"):
-        response_properties["photoCount"] = int(call.data[1:])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f"✅ <b>NUMBER OF PHOTOS</b> | Your choice: {call.data[1:]}", parse_mode="html")
-        hotels_parser(chat_id=call.message.chat.id)
-
-    elif call.data.startswith("+") or call.data.startswith("-"):
-        if re.fullmatch(pattern=r"[+-]\d+", string=f"{call.data}"):
-            response_properties["priceRange"] += int(call.data)
-            if response_properties["priceRange"] < 0:
-                response_properties["priceRange"] = 0
-
-            try:
-                bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id + 1,
-                                      text=f"Your input: {response_properties['priceRange']} {response_properties['currency']}")
-            finally:
-                bot.answer_callback_query(callback_query_id=call.id)
-        else:
-            bot.edit_message_text(
-                text=f"✅ <b>MAX PRICE</b> | Your choice: {response_properties['priceRange']} {response_properties['currency']}",
-                chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
-            bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id + 1)
-            get_distance(call.message)
-
-    elif call.data.startswith("d"):
-        response_properties["distance"] = float(call.data[1:])
-
-        if call.data[1:] == "inf":
-            miles = "7+"
-        else:
-            miles = call.data[1:]
-
-        bot.edit_message_text(
-            text=f"✅ <b>DISTANCE FROM CENTER</b> | Your choice: {miles} miles",
-            chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="html")
-        get_number(call.message)
-
-    else:
-        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
