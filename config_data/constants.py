@@ -11,8 +11,8 @@ url_photos = "https://hotels4.p.rapidapi.com/properties/get-hotel-photos"
 
 # Header Parameters
 headers = {
-    "X-RapidAPI-Key": "624162d6f6msh896925e99832f85p116bfbjsn1aa5f4b17c97",
-    "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+	"X-RapidAPI-Key": "624162d6f6msh896925e99832f85p116bfbjsn1aa5f4b17c97",
+	"X-RapidAPI-Host": "hotels4.p.rapidapi.com"
 }
 
 # DB information
