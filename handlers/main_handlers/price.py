@@ -10,11 +10,11 @@ def price(message: types.Message) -> None:
 
     If user entered lowprice: function sets sortOrder properties to 'PRICE' (from cheap to expensive)
     If user entered highprice: function sets sortOrder properties to 'PRICE_HIGHEST_FIRST' (from expensive to cheap)
-    If user entered bestdeal: function sets sortOrder properties to 'BEST_SELLER'
+    If user entered bestdeal: function sets sortOrder properties to 'BEST_DEAL' (PRICE + PRICE_HIGHEST_FIRST)
 
     And waits for a message from user with city name. Then it transmits control to Function get_name.
 
-    :param message: Message instance with text '/lowprice'
+    :param message: Message instance with text '/lowprice' or '/highprice' or '/bestdeal'
     :return: None
     """
     calendar_data["to"] = 0
@@ -36,8 +36,8 @@ def price(message: types.Message) -> None:
         # Search will be done by price (from expensive to cheap)
         response_properties["sortOrder"] = "PRICE_HIGHEST_FIRST"
     else:
-        # Search will be done by bestsellers
-        response_properties["sortOrder"] = "BEST_SELLER"
+        # PRICE + PRICE_HIGHEST_FIRST
+        response_properties["sortOrder"] = "BEST_DEAL"
 
     bot.send_message(chat_id=message.chat.id, text=f"🕓 <b>BOOKING</b> | Your choice: from - to -", parse_mode="html")
     get_days(chat_id=message.chat.id)
