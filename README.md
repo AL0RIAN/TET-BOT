@@ -29,17 +29,17 @@
 
 ##  <li>*price function (commands: /lowprice, /highprice, /bestdeal)*</li>
 
-				
     This function sets functions route to find hotels
 
     If user entered lowprice: function sets sortOrder properties to 'PRICE' (from cheap to expensive)
     If user entered highprice: function sets sortOrder properties to 'PRICE_HIGHEST_FIRST' (from expensive to cheap)
-    If user entered bestdeal: function sets sortOrder properties to 'DISTANCE_FROM_LANDMARK'
+    If user entered bestdeal: function sets sortOrder properties to 'BEST_DEAL' (PRICE + PRICE_HIGHEST_FIRST)
 
     And waits for a message from user with city name. Then it transmits control to Function get_name.
 
-    :param message: Message instance with text '/lowprice'
+    :param message: Message instance with text '/lowprice' or '/highprice' or '/bestdeal'
     :return: None
+
 </ol>
 
 
@@ -93,26 +93,14 @@
     :param call: CallbackQuery instance
     :return: None
 
-##  <li>*min_price_handler*</li>
+##  <li>*price_range_handler*</li>
 
-    If callback data include pattern r"min[+-]\d+":
-        Step 1. It adds to response_properties["priceRange"]
-        Step 2. callback_worker edits input prompt message from call
-    If callback data include 'OK':
-        Step 1. callback_worker edits input prompt message from call
-        Step 2. callback_worker transmits control to function 'get_max_price'
+    The handler accepts a call starting with min or max.
 
-    :param call: CallbackQuery instance
-    :return: None
+    If max, then the data is entered into response_properties["priceMax"].
+    Else added to response_properties["priceMin"].
 
-##  <li>*max_price_handler*</li>
-
-    If callback data include pattern r"max[+-]\d+":
-        Step 1. It adds to response_properties["priceRange"]
-        Step 2. callback_worker edits input prompt message from call
-    If callback data include 'OK':
-        Step 1. callback_worker edits input prompt message from call
-        Step 2. callback_worker transmits control to function 'get_distance'
+    If the handler receives "maxOK", then control is transferred to the get_distance function
 
     :param call: CallbackQuery instance
     :return: None
@@ -136,6 +124,8 @@
 				
     This function gets number of days from user and transmits control to function get_name.
 
+    This function generates a calendar page for the current month.
+
     :param message: Message instance with number of days
     :return: None
 ##   <li>*get_name function*</li> 
@@ -150,12 +140,7 @@
 
 ##   <li>*get_price_range function*</li> 
 
-				
-    This function creates a keyboard with 2 rows and 5 columns
-    With number buttons and OK-button.
-    Then function sends it to user's chat.
-
-    Clicking button calls data and sends it to callback handler function.
+    This function gets the price range from the user
 
     :param message: Message instance with city name
     :return: None
@@ -216,7 +201,7 @@
 
 ##  <li>*result_out function*</li>
 
-     Function sends to chat a message with all information user requested
+    Function sends to chat a message with all information user requested
 
     :param chat_id: chat id
     :param hotels: list of hotels

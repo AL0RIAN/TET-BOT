@@ -52,7 +52,7 @@ def get_name(message: types.Message) -> None:
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
                               text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}", parse_mode="html")
 
-        if response_properties["sortOrder"] == "BEST_SELLER":
+        if response_properties["sortOrder"] == "BEST_DEAL":
             get_price_range(message=message)
         else:
             get_number(message)
@@ -186,40 +186,46 @@ def hotels_parser(chat_id: str) -> None:
     bot.send_message(chat_id=chat_id, text="✅ <b>REQUEST HAD ACCEPTED</b> | Please Wait", parse_mode="html",
                      disable_notification=False)
     city_querystring = {"query": f"{response_properties['city']}", "locale": "en_US", "currency": "USD"}
+
     city_response = json.loads(requests.request("GET", url_city, headers=headers, params=city_querystring).text)
+
     city_id = city_response["suggestions"][0]["entities"][0]["destinationId"]
 
     logg.logger(text=f"City id is {city_id}", report_type="debug")
 
     # Getting list of hotels by city id
-    hotels: List[dict] = list()
     min_price = response_properties["priceMin"]
     max_price = response_properties["priceMax"]
-    hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25",
-                          "checkIn": f"{calendar_data['from']}",
-                          "checkOut": f"{calendar_data['to']}", "adults1": "1",
-                          "sortOrder": f"{response_properties['sortOrder']}",
-                          "locale": "en_US", "currency": "USD"}
-    hotels_response = json.loads(
-        requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
+    hotels: List[dict] = list()
+    sort_order = response_properties["sortOrder"]
 
-    for hotel in hotels_response["data"]["body"]["searchResults"]["results"]:
-        if len(hotels) == response_properties["hotelCount"]:
-            break
+    for response in ("PRICE", "PRICE_HIGHEST_FIRST"):
+        if sort_order == response or sort_order == "BEST_DEAL":
+            hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25",
+                                  "checkIn": f"{calendar_data['from']}",
+                                  "checkOut": f"{calendar_data['to']}", "adults1": "1",
+                                  "sortOrder": f"{response_properties['sortOrder']}",
+                                  "locale": "en_US", "currency": "USD"}
+            hotels_response = json.loads(
+                requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
 
-        try:
-            result = re.match(pattern=r"\d+.\d{0,}", string=hotel["landmarks"][0]["distance"])
-            distance = float(result.group(0))
-        except KeyError:
-            distance = 0.0
+            for hotel in hotels_response["data"]["body"]["searchResults"]["results"]:
+                if len(hotels) == response_properties["hotelCount"]:
+                    break
 
-        try:
-            curr_hotel_price = float(hotel["ratePlan"]["price"]["exactCurrent"])
-        except KeyError:
-            curr_hotel_price = 0.0
+                try:
+                    result = re.match(pattern=r"\d+.\d{0,}", string=hotel["landmarks"][0]["distance"])
+                    distance = float(result.group(0))
+                except KeyError:
+                    distance = 0.0
 
-        if (min_price < curr_hotel_price <= max_price) and (distance <= response_properties["distance"]):
-            hotels.append(hotel)
+                try:
+                    curr_hotel_price = float(hotel["ratePlan"]["price"]["exactCurrent"])
+                except KeyError:
+                    curr_hotel_price = 0.0
+
+                if (min_price < curr_hotel_price <= max_price) and (distance <= response_properties["distance"]):
+                    hotels.append(hotel)
 
     # Getting list of photos
     photos: List[str] = list()
