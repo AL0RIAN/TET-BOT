@@ -1,3 +1,2 @@
 from . import utils
-
-print("\nInfo: __init__ utils")
+from . import InlineKeyboards
