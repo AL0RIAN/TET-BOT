@@ -1,12 +1,19 @@
 import re
 import json
+import threading
+import time
 import requests
 import database
+from threading import Thread, Lock
 from typing import List
 from telebot import types
 from debugging import logg
 from . import InlineKeyboards
 from config_data.constants import *
+
+lock = Lock()
+stop_animation = False
+load_dotenv()
 
 
 def get_days(chat_id: str) -> None:
@@ -52,7 +59,7 @@ def get_name(message: types.Message) -> None:
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id - 1,
                               text=f"✅ <b>CITY NAME</b> | Your choice: {message.text}", parse_mode="html")
 
-        if response_properties["sortOrder"] == "BEST_DEAL":
+        if response_properties["sortOrder"] == "RECOMMENDED":
             get_price_range(message=message)
         else:
             get_number(message)
@@ -165,8 +172,21 @@ def get_photo_number(message: types.Message) -> None:
     bot.send_message(chat_id=message.chat.id, text="📸 How much: ", reply_markup=keyboard, disable_notification=False)
 
 
+def loading_animation(chat_id: int, msg_id: int):
+    global stop_animation
+    symbols = ['|', '/', '-', '\\']
+    while not stop_animation:
+        for symbol in symbols:
+            bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+                                  text=f"⌛ <b>REQUEST HAS BEEN ACCEPTED</b> {symbol} Please Wait", parse_mode="html")
+            time.sleep(0.5)
+
+    bot.edit_message_text(chat_id=chat_id, message_id=msg_id,
+                          text=f"✅ <b>REQUEST HAS BEEN PROCESSED</b>", parse_mode="html")
+
+
 @logg.timer
-def hotels_parser(chat_id: str) -> None:
+def hotels_parser(chat_id: int) -> None:
     """
     This function finds hotels by user request (response_properties)
 
@@ -178,18 +198,25 @@ def hotels_parser(chat_id: str) -> None:
     :param chat_id: chat id
     :return: None
     """
+    global stop_animation
+    stop_animation = False
+    msg = bot.send_message(chat_id=chat_id, text="⌛ <b>THE REQUEST HAS BEEN ACCEPTED</b> | Please Wait",
+                           parse_mode="html",
+                           disable_notification=False)
+
+    animation_thread = threading.Thread(target=loading_animation, args=(chat_id, msg.message_id))
+    animation_thread.start()
 
     logg.logger(text=f"{response_properties}", report_type="debug")
     logg.logger(text=f"{calendar_data}", report_type="debug")
 
+    city_querystring = {"q": f"{response_properties['city']}", "locale": "en_US", "langid": "1033",
+                        "siteid": "300000001"}
+
+    city_response = json.loads(requests.get(url_city, headers=headers, params=city_querystring).text)
+
     # Getting city id
-    bot.send_message(chat_id=chat_id, text="✅ <b>REQUEST HAD ACCEPTED</b> | Please Wait", parse_mode="html",
-                     disable_notification=False)
-    city_querystring = {"query": f"{response_properties['city']}", "locale": "en_US", "currency": "USD"}
-
-    city_response = json.loads(requests.request("GET", url_city, headers=headers, params=city_querystring).text)
-
-    city_id = city_response["suggestions"][0]["entities"][0]["destinationId"]
+    city_id = city_response["sr"][0]["gaiaId"]
 
     logg.logger(text=f"City id is {city_id}", report_type="debug")
 
@@ -199,121 +226,185 @@ def hotels_parser(chat_id: str) -> None:
     hotels: List[dict] = list()
     sort_order = response_properties["sortOrder"]
 
-    for response in ("PRICE", "PRICE_HIGHEST_FIRST"):
-        if sort_order == response or sort_order == "BEST_DEAL":
-            hotels_querystring = {"destinationId": f"{city_id}", "pageNumber": "1", "pageSize": "25",
-                                  "checkIn": f"{calendar_data['from']}",
-                                  "checkOut": f"{calendar_data['to']}", "adults1": "1",
-                                  "sortOrder": f"{response_properties['sortOrder']}",
-                                  "locale": "en_US", "currency": "USD"}
-            hotels_response = json.loads(
-                requests.request("GET", url=url_properties, headers=headers, params=hotels_querystring).text)
+    payload = {
+        "currency": "USD",
+        "eapid": 1,
+        "locale": "en_US",
+        "siteId": 300000001,
+        "destination": {"regionId": str(city_id)},
+        "checkInDate": {
+            "day": datetime.datetime.strptime(calendar_data["from"], "%Y-%m-%d").day,
+            "month": datetime.datetime.strptime(calendar_data["from"], "%Y-%m-%d").month,
+            "year": datetime.datetime.strptime(calendar_data["from"], "%Y-%m-%d").year
+        },
+        "checkOutDate": {
+            "day": datetime.datetime.strptime(calendar_data["to"], "%Y-%m-%d").day,
+            "month": datetime.datetime.strptime(calendar_data["to"], "%Y-%m-%d").month,
+            "year": datetime.datetime.strptime(calendar_data["to"], "%Y-%m-%d").year
+        },
+        "rooms": [
+            {
+                "adults": 1,
+            }
+        ],
+        "resultsStartingIndex": 0,
+        "resultsSize": 200,
+        "sort": sort_order if sort_order in ("RECOMMENDED", "PRICE_LOW_TO_HIGH") else "PRICE_LOW_TO_HIGH"
+    }
 
-            for hotel in hotels_response["data"]["body"]["searchResults"]["results"]:
-                if len(hotels) == response_properties["hotelCount"]:
-                    break
+    if sort_order == "RECOMMENDED":
+        payload["criteria"] = {
+            "price": {
+                "max": max_price,
+                "min": min_price
+            }}
 
-                try:
-                    result = re.match(pattern=r"\d+.\d{0,}", string=hotel["landmarks"][0]["distance"])
-                    distance = float(result.group(0))
-                except KeyError:
-                    distance = 0.0
+    headers["Content-Type"] = "application/json"
+    response = requests.post(url=url_properties, headers=headers, json=payload)
+    hotels_response = json.loads(response.text)
 
-                try:
-                    curr_hotel_price = float(hotel["ratePlan"]["price"]["exactCurrent"])
-                except KeyError:
-                    curr_hotel_price = 0.0
+    for hotel in hotels_response["data"]["propertySearch"]["properties"]:
+        if len(hotels) == response_properties["hotelCount"]:
+            break
 
-                if (min_price < curr_hotel_price <= max_price) and (distance <= response_properties["distance"]):
-                    hotels.append(hotel)
+        try:
+            distance = hotel["destinationInfo"]["distanceFromDestination"]["value"]
+        except KeyError:
+            distance = 0.0
 
-    # Getting list of photos
-    photos: List[str] = list()
-    if response_properties["photoCount"] > 0:
-        for hotel in hotels:
-            hotel_id = hotel["id"]
-            querystring = {"id": hotel_id}
-            photo_response = json.loads(requests.request("GET", url_photos, headers=headers, params=querystring).text)
+        if sort_order == "RECOMMENDED":
+            if distance <= response_properties["distance"]:
+                hotels.append(hotel)
+        else:
+            hotels.append(hotel)
 
-            for photo in range(response_properties["photoCount"]):
-                try:
-                    photos.append(photo_response["roomImages"][photo]["images"][photo]["baseUrl"].format(size="w"))
-                except IndexError:
-                    photos.append(photo_response["hotelImages"][photo]["baseUrl"].format(size="w"))
+    if sort_order == "PRICE_HIGHEST_FIRST":
+        hotels.reverse()
 
-    result_out(chat_id=chat_id, hotels=hotels, photos=photos)
+    result_out(chat_id=chat_id, hotels=hotels)
+    stop_animation = True
+    animation_thread.join()
 
 
-def result_out(chat_id: str, hotels: list, photos: list) -> None:
+def send_hotel_with_photo(chat_id: int, hotel_id: int, caption: str, photo_count: int) -> None:
+    headers["Content-Type"] = "application/json"
+    payload = {
+        "currency": "USD",
+        "eapid": 1,
+        "locale": "en_US",
+        "siteId": 300000001,
+        "propertyId": hotel_id
+    }
+
+    response_data = json.loads(
+        requests.post(url="https://hotels4.p.rapidapi.com/properties/v2/get-summary",
+                      json=payload,
+                      headers=headers).text)
+
+    current_photo = 0
+
+    # list of temporary  photos
+    hotel_photos: List[types.InputMediaPhoto] = list()
+
+    images_grouped = response_data["data"]["propertyInfo"]["propertyGallery"]["imagesGrouped"][0]
+
+    for photo in images_grouped["images"]:
+        if current_photo == 0:
+            hotel_photos.append(types.InputMediaPhoto(photo["image"]["url"], caption=caption, parse_mode="html"))
+        else:
+            hotel_photos.append(types.InputMediaPhoto(photo["image"]["url"], parse_mode="html"))
+
+        current_photo += 1
+        if current_photo >= photo_count:
+            break
+
+    bot.send_media_group(chat_id=chat_id, media=hotel_photos, disable_notification=True)
+
+
+def result_out(chat_id: int, hotels: list) -> None:
     """
     Function sends to chat a message with all information user requested
 
     :param chat_id: chat id
     :param hotels: list of hotels
-    :param photos: list of photos
     :return: None
     """
 
     hotels_names = str()
+    hotels_data = dict()
 
     if hotels:
         # current photo index in photos: List(str)
-        current_photo = 0
-
         for hotel in hotels:
+            hotels_data[hotel["id"]] = dict()
             name = f"<b>{hotel['name']}</b>"
-            url = f"<a href='https://ua.hotels.com/ho{hotel['id']}/'>click it</a>"
+            url = f"<a href='{os.getenv('BASIC_URL')}.h{hotel['id']}.Hotel-Information/'>click it</a>"
 
             try:
-                price_value = hotel['ratePlan']['price']['current']
-                total = round(response_properties["days"] * hotel['ratePlan']['price']['exactCurrent'], 1)
+                price_value = round(hotel["price"]["lead"]["amount"], 1)
             except KeyError:
                 price_value = "Price not available"
-                total = "-"
 
             try:
-                address = hotel['address']['streetAddress']
+                payload = {
+                    "currency": "USD",
+                    "eapid": 1,
+                    "locale": "en_US",
+                    "siteId": 300000001,
+                    "propertyId": hotel["id"]
+                }
+                headers["Content-Type"] = "application/json"
+                hotel_details = json.loads(
+                    requests.post(url="https://hotels4.p.rapidapi.com/properties/v2/get-summary",
+                                  json=payload,
+                                  headers=headers).text)
+                address = hotel_details["data"]["propertyInfo"]["summary"]["location"]["address"]["addressLine"]
             except KeyError:
                 address = "address not available"
 
             try:
-                distance = f"<b>Distance from center</b>: {hotel['landmarks'][0]['distance']}"
+                distance = (f"<b>Distance from center</b>: "
+                            f"{hotel['destinationInfo']['distanceFromDestination']['value']}")
             except KeyError:
                 distance = "not available"
 
-            caption = f"▫ {name}: {price_value} (total cost: {total} {response_properties['currency']})\n\n" \
+            caption = f"▫ {name}\n\n" \
+                      f"▫ <b>Price</b>: {price_value} {response_properties['currency']}\n\n" \
                       f"▫ <b>Address</b>: {address}\n\n" \
-                      f"▫ {distance}\n\n" \
+                      f"▫ {distance} mi\n\n" \
                       f"▫ <b>Hotel page</b>: {url}"
 
             hotels_names += f"{name}\n"
 
-            # list of temporary  photos
-            temp_photos: List[types.InputMediaPhoto] = list()
-
-            if response_properties["photoCount"] > 0:
-                # only first photo might have caption
-                temp_photos.append(types.InputMediaPhoto(photos[current_photo], caption=caption, parse_mode="html"))
-                for photo in range(response_properties["photoCount"] - 1):
-                    current_photo += 1
-                    temp_photos.append(types.InputMediaPhoto(photos[current_photo], parse_mode="html"))
-
-                bot.send_media_group(chat_id=chat_id, media=temp_photos, disable_notification=True)
-                current_photo += 1
-            else:
-                bot.send_message(chat_id=chat_id, text=caption, parse_mode="html", disable_notification=True,
-                                 disable_web_page_preview=True)
-
-        # Insert to database
-        to_data_base.append(hotels_names)
-
-        logg.logger(text=f"To database - {to_data_base}", report_type="debug")
-
-        try:
-            database.db_utils.to_db(data=to_data_base)
-        except Exception:
-            pass
-
-        to_data_base.clear()
+            hotels_data[hotel["id"]]["caption"] = caption
     else:
         bot.send_message(chat_id=chat_id, text="❌ Nothing found for this require")
+
+    if response_properties["photoCount"] > 0:
+        threads = list()
+        for hotel_id in hotels_data:
+            thread = Thread(target=send_hotel_with_photo, args=(chat_id,
+                                                                hotel_id,
+                                                                hotels_data[hotel_id]["caption"],
+                                                                response_properties["photoCount"]))
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+    else:
+        for hotel_id in hotels_data:
+            bot.send_message(chat_id=chat_id, text=hotels_data[hotel_id]["caption"], parse_mode="html",
+                             disable_notification=True,
+                             disable_web_page_preview=True)
+
+    # Insert to database
+    to_data_base.append(hotels_names)
+
+    logg.logger(text=f"To database - {to_data_base}", report_type="debug")
+
+    try:
+        database.db_utils.to_db(data=to_data_base)
+    except Exception:
+        pass
+    to_data_base.clear()

@@ -1,18 +1,22 @@
+import os
 import telebot
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # DiplomaTestSkillbox token
-bot = telebot.TeleBot("5374577409:AAEqaoAS1vPRc1mDhre5aM3Z1rIw1Ln_yug")
+bot = telebot.TeleBot(os.getenv("BOT_KEY"))
 
 # Requests URLs
-url_city = "https://hotels4.p.rapidapi.com/locations/v2/search"
-url_properties = "https://hotels4.p.rapidapi.com/properties/list"
+url_city = "https://hotels4.p.rapidapi.com/locations/v3/search"
+url_properties = "https://hotels4.p.rapidapi.com/properties/v2/list"
 url_photos = "https://hotels4.p.rapidapi.com/properties/get-hotel-photos"
 
 # Header Parameters
 headers = {
-	"X-RapidAPI-Key": "624162d6f6msh896925e99832f85p116bfbjsn1aa5f4b17c97",
-	"X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+    "X-RapidAPI-Key": os.getenv("RAPID_API_KEY"),
+    "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
 }
 
 # DB information
@@ -38,7 +42,7 @@ response_properties = {"sortOrder": str(),
                        "photos": "No",
                        "photoCount": 0,
                        "priceMin": 0,
-                       "priceMax": float("inf"),
-                       "distance": float("inf"),
+                       "priceMax": 10000.0,
+                       "distance": 0.0,
                        "currency": "USD"
                        }

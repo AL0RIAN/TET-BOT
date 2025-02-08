@@ -26,18 +26,18 @@ def price(message: types.Message) -> None:
 
     # Each new call to this function response_properties updates its values
     response_properties["priceMin"] = 0
-    response_properties["priceMax"] = float("inf")
-    response_properties["distance"] = float("inf")
+    response_properties["priceMax"] = 10000
+    response_properties["distance"] = 0
 
     # Search will be done by price (from cheap to expensive)
     if message.text == "/lowprice":
-        response_properties["sortOrder"] = "PRICE"
+        response_properties["sortOrder"] = "PRICE_LOW_TO_HIGH"
     elif message.text == "/highprice":
         # Search will be done by price (from expensive to cheap)
         response_properties["sortOrder"] = "PRICE_HIGHEST_FIRST"
     else:
         # PRICE + PRICE_HIGHEST_FIRST
-        response_properties["sortOrder"] = "BEST_DEAL"
+        response_properties["sortOrder"] = "RECOMMENDED"
 
     bot.send_message(chat_id=message.chat.id, text=f"🕓 <b>BOOKING</b> | Your choice: from - to -", parse_mode="html")
     get_days(chat_id=message.chat.id)
