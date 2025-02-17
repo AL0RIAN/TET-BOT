@@ -269,11 +269,13 @@ def hotels_parser(chat_id: int) -> None:
 
         try:
             distance = hotel["destinationInfo"]["distanceFromDestination"]["value"]
+            price = hotel["price"]["lead"]["amount"]
         except KeyError:
+            price = 0.0
             distance = 0.0
 
         if sort_order == "RECOMMENDED":
-            if distance <= response_properties["distance"]:
+            if (distance <= response_properties["distance"]) and (min_price <= price <= max_price):
                 hotels.append(hotel)
         else:
             hotels.append(hotel)
